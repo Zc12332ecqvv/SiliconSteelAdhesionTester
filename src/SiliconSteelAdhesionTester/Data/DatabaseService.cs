@@ -15,10 +15,10 @@ namespace SiliconSteelAdhesionTester.Data
 
         public DatabaseService()
         {
-            var dataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
+            string dataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
             Directory.CreateDirectory(dataDir);
             DatabasePath = Path.Combine(dataDir, "AdhesionTester.db");
-            var legacyDatabasePath = Path.Combine(dataDir, "Sorter.db");
+            string legacyDatabasePath = Path.Combine(dataDir, "Sorter.db");
             if (!File.Exists(DatabasePath) && File.Exists(legacyDatabasePath))
                 File.Copy(legacyDatabasePath, DatabasePath);
             _connectionString = "Data Source=" + DatabasePath + ";Version=3;foreign keys=true;";
@@ -27,8 +27,8 @@ namespace SiliconSteelAdhesionTester.Data
         public void Initialize()
         {
             if (!File.Exists(DatabasePath)) SQLiteConnection.CreateFile(DatabasePath);
-            using (var connection = Open())
-            using (var command = connection.CreateCommand())
+            using (SQLiteConnection connection = Open())
+            using (SQLiteCommand command = connection.CreateCommand())
             {
                 command.CommandText = @"
 CREATE TABLE IF NOT EXISTS Users(Id INTEGER PRIMARY KEY AUTOINCREMENT, UserName TEXT NOT NULL UNIQUE, DisplayName TEXT NOT NULL, PasswordHash TEXT NOT NULL, Role INTEGER NOT NULL, Enabled INTEGER NOT NULL DEFAULT 1, CreatedAt TEXT NOT NULL);
@@ -46,16 +46,16 @@ CREATE TABLE IF NOT EXISTS OperationLogs(Id INTEGER PRIMARY KEY AUTOINCREMENT, U
 
         public UserSession Authenticate(string userName, string password)
         {
-            using (var connection = Open())
-            using (var command = connection.CreateCommand())
+            using (SQLiteConnection connection = Open())
+            using (SQLiteCommand command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT Id,UserName,DisplayName,Role FROM Users WHERE UserName=@u AND PasswordHash=@p AND Enabled=1";
                 command.Parameters.AddWithValue("@u", userName.Trim());
                 command.Parameters.AddWithValue("@p", Hash(password));
-                using (var reader = command.ExecuteReader())
+                using (SQLiteDataReader reader = command.ExecuteReader())
                 {
                     if (!reader.Read()) return null;
-                    var user = new UserSession { Id = reader.GetInt64(0), UserName = reader.GetString(1), DisplayName = reader.GetString(2), Role = (UserRole)reader.GetInt32(3) };
+                    UserSession user = new UserSession { Id = reader.GetInt64(0), UserName = reader.GetString(1), DisplayName = reader.GetString(2), Role = (UserRole)reader.GetInt32(3) };
                     LogOperation(user.UserName, "登录", "登录成功");
                     return user;
                 }
@@ -77,22 +77,22 @@ CREATE TABLE IF NOT EXISTS OperationLogs(Id INTEGER PRIMARY KEY AUTOINCREMENT, U
             Execute("INSERT OR IGNORE INTO Users(UserName,DisplayName,PasswordHash,Role,Enabled,CreatedAt) VALUES(@a,@b,@c,@d,1,@e)", userName, displayName, Hash(password), (int)role, DateTime.Now.ToString("s"));
         }
 
-        private SQLiteConnection Open() { var c = new SQLiteConnection(_connectionString); c.Open(); return c; }
+        private SQLiteConnection Open() { SQLiteConnection c = new SQLiteConnection(_connectionString); c.Open(); return c; }
 
         private void Execute(string sql, params object[] values)
         {
-            using (var connection = Open())
-            using (var command = connection.CreateCommand())
+            using (SQLiteConnection connection = Open())
+            using (SQLiteCommand command = connection.CreateCommand())
             {
                 command.CommandText = sql;
-                for (var i = 0; i < values.Length; i++) command.Parameters.AddWithValue("@" + (char)('a' + i), values[i] ?? DBNull.Value);
+                for (int i = 0; i < values.Length; i++) command.Parameters.AddWithValue("@" + (char)('a' + i), values[i] ?? DBNull.Value);
                 command.ExecuteNonQuery();
             }
         }
 
         private static string Hash(string value)
         {
-            using (var sha = SHA256.Create()) return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));
+            using (SHA256 sha = SHA256.Create()) return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));
         }
     }
 }

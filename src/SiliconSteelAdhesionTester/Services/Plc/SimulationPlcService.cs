@@ -41,7 +41,7 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                 if (_lineRunning && !_linePaused) _processTick++;
                 if (_lineRunning && !_linePaused && _processTick % 8 == 0)
                 {
-                    for (var i = 0; i < 4; i++)
+                    for (int i = 0; i < 4; i++)
                     {
                         if (!_stationRunning[i]) continue;
                         _steps[i]++;
@@ -60,8 +60,8 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     }
                 }
 
-                var stations = new StationSnapshot[4];
-                for (var i = 0; i < 4; i++)
+                StationSnapshot[] stations = new StationSnapshot[4];
+                for (int i = 0; i < 4; i++)
                 {
                     stations[i] = new StationSnapshot
                     {
@@ -74,8 +74,7 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     };
                 }
 
-                var handler = SnapshotChanged;
-                if (handler != null) handler(this, new PlcSnapshot
+                SnapshotChanged?.Invoke(this, new PlcSnapshot
                 {
                     Connected = true,
                     Automatic = !GetBool(PlcAddresses.AutoMode),
@@ -86,6 +85,8 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     ShiftCount = _completedCount,
                     FlowStepIndex = _flowStep,
                     FlowPaused = !_lineRunning || _linePaused,
+                    S2ScanAllowed = GetBool(PlcAddresses.S2ScanAllowed),
+                    S3ScanAllowed = GetBool(PlcAddresses.S3ScanAllowed),
                     FlowMessage = FlowDescription(_flowStep, _lineRunning, _linePaused)
                 });
                 await Task.Delay(_settings.PollIntervalMs, cancellationToken).ConfigureAwait(false);
@@ -102,21 +103,21 @@ namespace SiliconSteelAdhesionTester.Services.Plc
         public Task WriteAsync(string address, object value, CancellationToken cancellationToken)
         {
             _memory[address] = value;
-            var isOn = value is bool && (bool)value;
+            bool isOn = value is bool && (bool)value;
             if (address == PlcAddresses.LineStart && isOn)
             {
                 if (string.IsNullOrEmpty(_currentBarcode))
                     _currentBarcode = "SIM-1-" + _barcodeSequence.ToString("D6");
                 _lineRunning = true;
                 _linePaused = false;
-                for (var i = 0; i < 4; i++) _stationRunning[i] = true;
+                for (int i = 0; i < 4; i++) _stationRunning[i] = true;
             }
             else if (address == PlcAddresses.LinePause) { _linePaused = true; }
-            else if (address == PlcAddresses.SimulationLineStop) { _lineRunning = false; _linePaused = false; for (var i = 0; i < 4; i++) _stationRunning[i] = false; }
-            else if (address == PlcAddresses.LineHome && isOn) { for (var i = 0; i < 4; i++) _steps[i] = 0; _flowStep = 0; }
+            else if (address == PlcAddresses.SimulationLineStop) { _lineRunning = false; _linePaused = false; for (int i = 0; i < 4; i++) _stationRunning[i] = false; }
+            else if (address == PlcAddresses.LineHome && isOn) { for (int i = 0; i < 4; i++) _steps[i] = 0; _flowStep = 0; }
             else
             {
-                for (var station = 1; station <= 4; station++)
+                for (int station = 1; station <= 4; station++)
                 {
                     if (address == PlcAddresses.StationStart(station) && isOn)
                     {
@@ -132,14 +133,12 @@ namespace SiliconSteelAdhesionTester.Services.Plc
 
         public Task<object> ReadAsync(string address, CancellationToken cancellationToken)
         {
-            object value;
-            return Task.FromResult(_memory.TryGetValue(address, out value) ? value : (object)false);
+            return Task.FromResult(_memory.TryGetValue(address, out object value) ? value : (object)false);
         }
 
         private bool GetBool(string address)
         {
-            object value;
-            return _memory.TryGetValue(address, out value) && value is bool && (bool)value;
+            return _memory.TryGetValue(address, out object value) && value is bool && (bool)value;
         }
 
         private static string FlowDescription(int step, bool running, bool paused)

@@ -1,0 +1,7 @@
+root = true
+
+[*.cs]
+# 项目代码优先使用明确类型，只有匿名类型等无法显式声明时才使用 var。
+csharp_style_var_for_built_in_types = false:warning
+csharp_style_var_when_type_is_apparent = false:warning
+csharp_style_var_elsewhere = false:warning

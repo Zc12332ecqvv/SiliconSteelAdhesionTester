@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -21,14 +21,19 @@ namespace SiliconSteelAdhesionTester.Forms
             _stationContinuous = new[] { btnS1Continuous, btnS2Continuous, btnS3Continuous, btnS4Continuous };
             _flowNodes = new[] { lblFlow1, lblFlow2, lblFlow3, lblFlow4, lblFlow5, lblFlow6, lblFlow7, lblFlow8 };
             lblMaterialType.Text = "等待任务数据";
-            dgvTasks.Rows.Add("-", "-", "等待LIMS任务");
             AppendRuntimeLog("主界面初始化完成");
 
-            BindCommand(btnAutoMode, async () =>
+            btnAutoMode.Click += async (s, e) =>
             {
-                _automatic = true;
-                await _plc.WriteAsync(PlcAddresses.AutoMode, false, _shutdown.Token);
-            });
+                if (_automatic) return;
+                if (!CanSwitchOperatingMode()) return;
+                await ExecuteButtonAsync(btnAutoMode, async () =>
+                {
+                    await _plc.WriteAsync(PlcAddresses.AutoMode, false, _shutdown.Token);
+                    _automatic = true;
+                    AppendRuntimeLog("已切换为自动模式");
+                });
+            };
             btnManualMode.Click += async (s, e) =>
             {
                 if (!_user.CanDebug)
@@ -36,27 +41,90 @@ namespace SiliconSteelAdhesionTester.Forms
                     MessageBox.Show("当前账号没有手动调试权限，请使用电气调试员或超级管理员账号。", "权限不足", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
-                await ExecuteButtonAsync(btnManualMode, async () =>
+
+                if (_automatic)
                 {
-                    _automatic = false;
-                    await _plc.WriteAsync(PlcAddresses.AutoMode, true, _shutdown.Token);
-                });
+                    if (!CanSwitchOperatingMode()) return;
+                    await ExecuteButtonAsync(btnManualMode, async () =>
+                    {
+                        await _plc.WriteAsync(PlcAddresses.AutoMode, true, _shutdown.Token);
+                        _automatic = false;
+                        AppendRuntimeLog("已切换为手动模式");
+                    });
+                }
+                if (!_automatic) OpenManualTaskDialog();
             };
             BindCommand(btnLineStart, () => _plc.PulseAsync(PlcAddresses.LineStart, _shutdown.Token));
             BindCommand(btnLinePause, () => _plc.WriteAsync(PlcAddresses.LinePause, false, _shutdown.Token));
             BindCommand(btnLineStop, () => _plc.WriteAsync(_settings.Simulation ? PlcAddresses.SimulationLineStop : PlcAddresses.LinePause, true, _shutdown.Token));
             BindCommand(btnLineHome, () => _plc.PulseAsync(PlcAddresses.LineHome, _shutdown.Token));
             BindCommand(btnFaultReset, () => _plc.PulseAsync(PlcAddresses.ResetPulse, _shutdown.Token));
-            for (var station = 1; station <= 4; station++) BindStation(station);
+            for (int station = 1; station <= 4; station++) BindStation(station);
 
             btnVision.Click += (s, e) => OpenVisionWindow();
             btnNavVision.Click += (s, e) => OpenVisionWindow();
             btnDebug.Click += (s, e) => new DebugForm(_plc, _user, _shutdown.Token).Show(this);
             btnRecords.Click += (s, e) => MessageBox.Show("生产记录查询将在数据业务阶段接入。", "生产记录");
             btnFaultLogs.Click += (s, e) => MessageBox.Show("故障日志查询将在报表阶段接入。", "故障日志");
-            btnNavRecords.Click += (s, e) => btnRecords.PerformClick();
-            btnNavLogs.Click += (s, e) => btnFaultLogs.PerformClick();
+            btnNavRecords.Click += (s, e) => MessageBox.Show("生产记录查询将在数据业务阶段接入。", "检测记录");
+            btnNavLogs.Click += (s, e) => MessageBox.Show("运行日志查询将在报表阶段接入。", "运行日志");
             btnNavSettings.Click += (s, e) => MessageBox.Show("系统设置页面将在相机、LIMS和正式判定参数确认后接入。", "系统设置");
+        }
+
+        private bool CanSwitchOperatingMode()
+        {
+            if (_latestSnapshot == null)
+            {
+                MessageBox.Show("尚未取得PLC状态，暂时不能切换手动/自动模式。",
+                    "无法切换模式", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            bool allHome = IsAllHome(_latestSnapshot);
+            bool paused = _latestSnapshot.FlowPaused;
+            if (allHome && paused) return true;
+
+            string missing = !allHome && !paused
+                ? "设备未全部回原位，并且流程尚未暂停。"
+                : !allHome
+                    ? "设备未全部回原位。"
+                    : "流程尚未暂停。";
+            MessageBox.Show(
+                missing + Environment.NewLine + "请先暂停流程并确认所有工位均在原位，再切换手动/自动模式。",
+                "不满足模式切换条件",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return false;
+        }
+
+        private void OpenManualTaskDialog()
+        {
+            using (ManualTaskForm dialog = new ManualTaskForm())
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+                string taskId = string.IsNullOrWhiteSpace(dialog.TrayNumber)
+                    ? "MAN-" + DateTime.Now.ToString("yyyyMMddHHmmss")
+                    : dialog.TrayNumber;
+                string oriented = dialog.OrientedCount.HasValue
+                    ? "取向 " + dialog.OrientedCount.Value
+                    : "取向未填";
+                string nonOriented = dialog.NonOrientedCount.HasValue
+                    ? "无取向 " + dialog.NonOrientedCount.Value
+                    : "无取向未填";
+
+                if (dgvTasks.Rows.Count == 1 &&
+                    Convert.ToString(dgvTasks.Rows[0].Cells[0].Value) == "-")
+                    dgvTasks.Rows.Clear();
+                dgvTasks.Rows.Insert(0, taskId, oriented + " / " + nonOriented, "手动任务待执行");
+                lblCurrentTask.Text = "当前任务 · 手动创建，等待启动";
+                lblBarcode.Text = taskId;
+                lblMaterialType.Text = oriented + "，" + nonOriented;
+                AppendRuntimeLog("[MANUAL] 已创建手动任务：" + taskId);
+                _database.LogOperation(_user.UserName, "创建手动任务",
+                    "料盘=" + (string.IsNullOrWhiteSpace(dialog.TrayNumber) ? "未填" : dialog.TrayNumber) +
+                    "；" + oriented + "；" + nonOriented);
+            }
         }
 
         private void OpenVisionWindow()
@@ -69,8 +137,8 @@ namespace SiliconSteelAdhesionTester.Forms
             BindCommand(_stationStarts[station - 1], () => _plc.PulseAsync(PlcAddresses.StationStart(station), _shutdown.Token));
             BindCommand(_stationContinuous[station - 1], async () =>
             {
-                var address = PlcAddresses.StationContinuous(station);
-                var current = Convert.ToBoolean(await _plc.ReadAsync(address, _shutdown.Token));
+                string address = PlcAddresses.StationContinuous(station);
+                bool current = Convert.ToBoolean(await _plc.ReadAsync(address, _shutdown.Token));
                 await _plc.WriteAsync(address, !current, _shutdown.Token);
                 _stationContinuous[station - 1].BackColor = !current ? Color.SeaGreen : Color.FromArgb(74, 78, 105);
             });

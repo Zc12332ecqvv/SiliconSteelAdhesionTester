@@ -14,14 +14,14 @@ namespace SiliconSteelAdhesionTester.Forms
         public VisionInspectionForm()
         {
             InitializeComponent();
-            cboMode.SelectedIndex = 0;
-            UpdateMode();
         }
 
         public VisionInspectionForm(IAdhesionVisionService vision)
             : this()
         {
             _vision = vision ?? throw new ArgumentNullException(nameof(vision));
+            cboMode.SelectedIndex = 0;
+            UpdateMode();
         }
 
         private void cboMode_SelectedIndexChanged(object sender, EventArgs e)
@@ -31,7 +31,7 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private void UpdateMode()
         {
-            var oriented = cboMode.SelectedIndex == 0;
+            bool oriented = cboMode.SelectedIndex == 0;
             lblBefore.Visible = txtBefore.Visible = btnBefore.Visible = oriented;
             lblAfter.Text = oriented ? "压弯后照片" : "胶带照片";
             lblInstruction.Text = oriented
@@ -51,7 +51,7 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private void SelectImage(TextBox target)
         {
-            using (var dialog = new OpenFileDialog())
+            using (OpenFileDialog dialog = new OpenFileDialog())
             {
                 dialog.Filter = "图像文件|*.bmp;*.jpg;*.jpeg;*.png;*.tif;*.tiff|所有文件|*.*";
                 if (dialog.ShowDialog(this) == DialogResult.OK)
@@ -64,7 +64,7 @@ namespace SiliconSteelAdhesionTester.Forms
             try
             {
                 btnAnalyze.Enabled = false;
-                var sampleId = string.IsNullOrWhiteSpace(txtSampleId.Text)
+                string sampleId = string.IsNullOrWhiteSpace(txtSampleId.Text)
                     ? DateTime.Now.ToString("yyyyMMddHHmmss")
                     : txtSampleId.Text.Trim();
                 AdhesionVisionResult result;
@@ -104,13 +104,13 @@ namespace SiliconSteelAdhesionTester.Forms
         private static void ShowImage(PictureBox target, string path)
         {
             if (!File.Exists(path)) return;
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-            using (var source = Image.FromStream(stream))
+            using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (Image source = Image.FromStream(stream))
             {
-                var copy = new Bitmap(source);
-                var old = target.Image;
+                Bitmap copy = new Bitmap(source);
+                Image old = target.Image;
                 target.Image = copy;
-                if (old != null) old.Dispose();
+                old?.Dispose();
             }
         }
     }

@@ -25,7 +25,7 @@ namespace SiliconSteelAdhesionTester.Data
         {
             _dataDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
             Directory.CreateDirectory(_dataDirectory);
-            var legacyLogPath = Path.Combine(_dataDirectory, "Sorter-Simulation.log");
+            string legacyLogPath = Path.Combine(_dataDirectory, "Sorter-Simulation.log");
             if (!File.Exists(DatabasePath) && File.Exists(legacyLogPath))
                 File.Copy(legacyLogPath, DatabasePath);
             if (!File.Exists(DatabasePath)) File.WriteAllText(DatabasePath, "Time\tType\tUser\tCode\tNode\tMessage" + Environment.NewLine, Encoding.UTF8);
@@ -33,9 +33,8 @@ namespace SiliconSteelAdhesionTester.Data
 
         public UserSession Authenticate(string userName, string password)
         {
-            Account account;
-            if (string.IsNullOrWhiteSpace(userName) || !_accounts.TryGetValue(userName.Trim(), out account) || account.Password != password) return null;
-            var user = new UserSession { Id = (long)account.Role, UserName = userName.Trim(), DisplayName = account.DisplayName, Role = account.Role };
+            if (string.IsNullOrWhiteSpace(userName) || !_accounts.TryGetValue(userName.Trim(), out Account account) || account.Password != password) return null;
+            UserSession user = new UserSession { Id = (long)account.Role, UserName = userName.Trim(), DisplayName = account.DisplayName, Role = account.Role };
             LogOperation(user.UserName, "登录", "仿真模式登录成功");
             return user;
         }
@@ -53,7 +52,7 @@ namespace SiliconSteelAdhesionTester.Data
         private void Append(string type, string user, string code, string node, string message)
         {
             if (string.IsNullOrEmpty(_dataDirectory)) Initialize();
-            var safe = (message ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Replace("\t", " ");
+            string safe = (message ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Replace("\t", " ");
             File.AppendAllText(DatabasePath, DateTime.Now.ToString("s") + "\t" + type + "\t" + user + "\t" + code + "\t" + node + "\t" + safe + Environment.NewLine, Encoding.UTF8);
         }
 

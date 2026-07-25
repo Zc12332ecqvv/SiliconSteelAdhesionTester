@@ -15,12 +15,12 @@ namespace SiliconSteelAdhesionTester
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            var database = new DatabaseService();
+            DatabaseService database = new DatabaseService();
             database.Initialize();
-            var settings = AppSettings.Load();
-            var plc = PlcServiceFactory.Create(settings);
+            AppSettings settings = AppSettings.Load();
+            IPlcService plc = PlcServiceFactory.Create(settings);
 
-            using (var login = new LoginForm(database))
+            using (LoginForm login = new LoginForm(database))
             {
                 if (login.ShowDialog() != DialogResult.OK) return;
                 Application.Run(new MainForm(login.CurrentUser, database, plc, settings));

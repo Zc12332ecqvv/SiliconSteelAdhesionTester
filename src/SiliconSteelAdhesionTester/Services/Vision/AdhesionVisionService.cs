@@ -27,26 +27,26 @@ namespace SiliconSteelAdhesionTester.Services.Vision
             Rectangle? inspectionRegion = null,
             string sampleId = null)
         {
-            using (var before = LoadColor(beforeBendingImagePath))
-            using (var afterOriginal = LoadColor(afterBendingImagePath))
-            using (var after = new Mat())
+            using (Mat before = LoadColor(beforeBendingImagePath))
+            using (Mat afterOriginal = LoadColor(afterBendingImagePath))
+            using (Mat after = new Mat())
             {
                 Cv2.Resize(afterOriginal, after, before.Size());
-                var roi = ResolveRegion(before.Size(), inspectionRegion);
+                Rect roi = ResolveRegion(before.Size(), inspectionRegion);
 
-                using (var beforeRoi = new Mat(before, roi))
-                using (var afterRoi = new Mat(after, roi))
-                using (var beforeLab = new Mat())
-                using (var afterLab = new Mat())
-                using (var difference = new Mat())
-                using (var mask = new Mat())
+                using (Mat beforeRoi = new Mat(before, roi))
+                using (Mat afterRoi = new Mat(after, roi))
+                using (Mat beforeLab = new Mat())
+                using (Mat afterLab = new Mat())
+                using (Mat difference = new Mat())
+                using (Mat mask = new Mat())
                 {
                     Cv2.CvtColor(beforeRoi, beforeLab, ColorConversionCodes.BGR2Lab);
                     Cv2.CvtColor(afterRoi, afterLab, ColorConversionCodes.BGR2Lab);
                     Cv2.GaussianBlur(beforeLab, beforeLab, new OpenCvSharp.Size(5, 5), 0);
                     Cv2.GaussianBlur(afterLab, afterLab, new OpenCvSharp.Size(5, 5), 0);
                     Cv2.Absdiff(beforeLab, afterLab, difference);
-                    var channels = Cv2.Split(difference);
+                    Mat[] channels = Cv2.Split(difference);
                     try
                     {
                         channels[0].CopyTo(mask);
@@ -56,10 +56,10 @@ namespace SiliconSteelAdhesionTester.Services.Vision
                     }
                     finally
                     {
-                        foreach (var channel in channels) channel.Dispose();
+                        foreach (Mat channel in channels) channel.Dispose();
                     }
 
-                    var particleCount = CleanAndCount(mask);
+                    int particleCount = CleanAndCount(mask);
                     return SaveResult(
                         AdhesionTestType.OrientedBeforeAfter,
                         after,
@@ -78,15 +78,15 @@ namespace SiliconSteelAdhesionTester.Services.Vision
             Rectangle? inspectionRegion = null,
             string sampleId = null)
         {
-            using (var tape = LoadColor(tapeImagePath))
+            using (Mat tape = LoadColor(tapeImagePath))
             {
-                var roi = ResolveRegion(tape.Size(), inspectionRegion);
-                using (var tapeRoi = new Mat(tape, roi))
-                using (var gray = new Mat())
-                using (var background = new Mat())
-                using (var difference = new Mat())
-                using (var mask = new Mat())
-                using (var backgroundKernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(51, 51)))
+                Rect roi = ResolveRegion(tape.Size(), inspectionRegion);
+                using (Mat tapeRoi = new Mat(tape, roi))
+                using (Mat gray = new Mat())
+                using (Mat background = new Mat())
+                using (Mat difference = new Mat())
+                using (Mat mask = new Mat())
+                using (Mat backgroundKernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(51, 51)))
                 {
                     Cv2.CvtColor(tapeRoi, gray, ColorConversionCodes.BGR2GRAY);
                     Cv2.GaussianBlur(gray, gray, new OpenCvSharp.Size(5, 5), 0);
@@ -96,7 +96,7 @@ namespace SiliconSteelAdhesionTester.Services.Vision
                     Cv2.Absdiff(gray, background, difference);
                     Cv2.Threshold(difference, mask, _settings.VisionDifferenceThreshold, 255, ThresholdTypes.Binary);
 
-                    var particleCount = CleanAndCount(mask);
+                    int particleCount = CleanAndCount(mask);
                     return SaveResult(
                         AdhesionTestType.NonOrientedTape,
                         tape,
@@ -112,19 +112,17 @@ namespace SiliconSteelAdhesionTester.Services.Vision
 
         private int CleanAndCount(Mat mask)
         {
-            using (var kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(3, 3)))
+            using (Mat kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(3, 3)))
             {
                 Cv2.MorphologyEx(mask, mask, MorphTypes.Open, kernel);
                 Cv2.MorphologyEx(mask, mask, MorphTypes.Close, kernel);
             }
 
-            OpenCvSharp.Point[][] contours;
-            HierarchyIndex[] hierarchy;
-            Cv2.FindContours(mask.Clone(), out contours, out hierarchy, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+            Cv2.FindContours(mask.Clone(), out OpenCvSharp.Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 
             mask.SetTo(Scalar.Black);
-            var accepted = new List<OpenCvSharp.Point[]>();
-            foreach (var contour in contours)
+            List<OpenCvSharp.Point[]> accepted = new List<OpenCvSharp.Point[]>();
+            foreach (OpenCvSharp.Point[] contour in contours)
             {
                 if (Cv2.ContourArea(contour) >= _settings.VisionMinimumParticleArea)
                     accepted.Add(contour);
@@ -145,34 +143,32 @@ namespace SiliconSteelAdhesionTester.Services.Vision
             string sampleId,
             string method)
         {
-            var defectPixels = Cv2.CountNonZero(roiMask);
-            var inspectionPixels = roi.Width * roi.Height;
-            var lossRate = inspectionPixels == 0 ? 0 : defectPixels * 100.0 / inspectionPixels;
-            var qualified = lossRate <= maximumLossRate;
+            int defectPixels = Cv2.CountNonZero(roiMask);
+            int inspectionPixels = roi.Width * roi.Height;
+            double lossRate = inspectionPixels == 0 ? 0 : defectPixels * 100.0 / inspectionPixels;
+            bool qualified = lossRate <= maximumLossRate;
 
-            var safeId = MakeSafeFileName(string.IsNullOrWhiteSpace(sampleId)
+            string safeId = MakeSafeFileName(string.IsNullOrWhiteSpace(sampleId)
                 ? DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture)
                 : sampleId);
-            var outputDirectory = Path.GetFullPath(_settings.VisionOutputDirectory);
-            var prefix = testType == AdhesionTestType.OrientedBeforeAfter ? "oriented" : "nonoriented_tape";
-            var categoryDirectory = Path.Combine(
+            string outputDirectory = Path.GetFullPath(_settings.VisionOutputDirectory);
+            string prefix = testType == AdhesionTestType.OrientedBeforeAfter ? "oriented" : "nonoriented_tape";
+            string categoryDirectory = Path.Combine(
                 outputDirectory,
                 testType == AdhesionTestType.OrientedBeforeAfter ? "oriented" : "non-oriented");
-            var maskDirectory = Path.Combine(categoryDirectory, "mask");
-            var markedDirectory = Path.Combine(categoryDirectory, "marked");
+            string maskDirectory = Path.Combine(categoryDirectory, "mask");
+            string markedDirectory = Path.Combine(categoryDirectory, "marked");
             Directory.CreateDirectory(maskDirectory);
             Directory.CreateDirectory(markedDirectory);
-            var maskPath = Path.Combine(maskDirectory, prefix + "_" + safeId + "_mask.png");
-            var annotatedPath = Path.Combine(markedDirectory, prefix + "_" + safeId + "_marked.jpg");
+            string maskPath = Path.Combine(maskDirectory, prefix + "_" + safeId + "_mask.png");
+            string annotatedPath = Path.Combine(markedDirectory, prefix + "_" + safeId + "_marked.jpg");
 
-            using (var fullMask = Mat.Zeros(source.Size(), MatType.CV_8UC1).ToMat())
-            using (var target = new Mat(fullMask, roi))
-            using (var annotated = source.Clone())
+            using (Mat fullMask = Mat.Zeros(source.Size(), MatType.CV_8UC1).ToMat())
+            using (Mat target = new Mat(fullMask, roi))
+            using (Mat annotated = source.Clone())
             {
                 roiMask.CopyTo(target);
-                OpenCvSharp.Point[][] contours;
-                HierarchyIndex[] hierarchy;
-                Cv2.FindContours(fullMask.Clone(), out contours, out hierarchy, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+                Cv2.FindContours(fullMask.Clone(), out OpenCvSharp.Point[][] contours, out HierarchyIndex[] hierarchy, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
                 Cv2.DrawContours(annotated, contours, -1, Scalar.Red, 2);
                 Cv2.Rectangle(annotated, roi, qualified ? Scalar.LimeGreen : Scalar.Red, 2);
                 Cv2.PutText(
@@ -206,7 +202,7 @@ namespace SiliconSteelAdhesionTester.Services.Vision
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
                 throw new FileNotFoundException("检测图片不存在。", path);
-            var image = Cv2.ImRead(path, ImreadModes.Color);
+            Mat image = Cv2.ImRead(path, ImreadModes.Color);
             if (image.Empty())
             {
                 image.Dispose();
@@ -219,16 +215,16 @@ namespace SiliconSteelAdhesionTester.Services.Vision
         {
             if (!requested.HasValue)
             {
-                var marginX = Math.Max(1, imageSize.Width / 20);
-                var marginY = Math.Max(1, imageSize.Height / 20);
+                int marginX = Math.Max(1, imageSize.Width / 20);
+                int marginY = Math.Max(1, imageSize.Height / 20);
                 return new Rect(marginX, marginY, imageSize.Width - marginX * 2, imageSize.Height - marginY * 2);
             }
 
-            var value = requested.Value;
-            var x = Math.Max(0, value.X);
-            var y = Math.Max(0, value.Y);
-            var right = Math.Min(imageSize.Width, value.Right);
-            var bottom = Math.Min(imageSize.Height, value.Bottom);
+            Rectangle value = requested.Value;
+            int x = Math.Max(0, value.X);
+            int y = Math.Max(0, value.Y);
+            int right = Math.Min(imageSize.Width, value.Right);
+            int bottom = Math.Min(imageSize.Height, value.Bottom);
             if (right <= x || bottom <= y)
                 throw new ArgumentOutOfRangeException(nameof(requested), "检测区域不在图片范围内。");
             return new Rect(x, y, right - x, bottom - y);
@@ -236,7 +232,7 @@ namespace SiliconSteelAdhesionTester.Services.Vision
 
         private static string MakeSafeFileName(string value)
         {
-            foreach (var invalid in Path.GetInvalidFileNameChars())
+            foreach (char invalid in Path.GetInvalidFileNameChars())
                 value = value.Replace(invalid, '_');
             return value;
         }

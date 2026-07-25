@@ -28,8 +28,14 @@ namespace SiliconSteelAdhesionTester.Forms
         private Button[] _stationContinuous;
         private bool _automatic;
         private Label[] _flowNodes;
-        private TcpBarcodeScannerService _barcodeScanners;
+        private readonly KeyboardBarcodeScanner _barcodeScanner;
         private string _lastScannedBarcode;
+        private bool _s2ScanAllowed;
+        private bool _s3ScanAllowed;
+        private bool _s2ScanResponseActive;
+        private bool _s3ScanResponseActive;
+        private PlcSnapshot _latestSnapshot;
+        private bool _resourcesDisposed;
 
         public MainForm()
         {
@@ -45,27 +51,23 @@ namespace SiliconSteelAdhesionTester.Forms
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             if (_settings.BarcodeScannerEnabled)
             {
-                _barcodeScanners = new TcpBarcodeScannerService(
-                    new BarcodeScannerEndpoint(
-                        BarcodeScannerSource.Oriented,
-                        _settings.OrientedScannerIp,
-                        _settings.OrientedScannerPort),
-                    new BarcodeScannerEndpoint(
-                        BarcodeScannerSource.NonOriented,
-                        _settings.NonOrientedScannerIp,
-                        _settings.NonOrientedScannerPort),
-                    _settings.DuplicateBarcodeSeconds,
-                    _settings.ScannerReconnectDelayMs);
-                _barcodeScanners.BarcodeScanned += BarcodeScanned;
-                _barcodeScanners.StatusChanged += ScannerStatusChanged;
+                _barcodeScanner = new KeyboardBarcodeScanner(
+                    _settings.BarcodeInputTimeoutMs,
+                    _settings.BarcodeMinimumLength,
+                    _settings.DuplicateBarcodeSeconds);
+                KeyPreview = true;
+                KeyPress += BarcodeKeyPress;
             }
             InitializeRuntimeBindings();
+            pnlProcess.Visible = false;
+            pnlStationHeader.Dock = DockStyle.None;
+            pnlStationHeader.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            pnlStationHeader.BringToFront();
             ApplyResponsiveLayout();
             ApplyPermissions();
             _plc.SnapshotChanged += PlcSnapshotChanged;
             _plc.CommunicationFault += PlcCommunicationFault;
             Shown += async (s, e) => await RunPlcAsync();
-            Shown += async (s, e) => await RunBarcodeScannersAsync();
             Shown += (s, e) =>
             {
                 MaximizedBounds = Screen.FromHandle(Handle).WorkingArea;
@@ -80,8 +82,8 @@ namespace SiliconSteelAdhesionTester.Forms
             if (ClientSize.Width <= 0) return;
             SuspendLayout();
 
-            var clientWidth = ClientSize.Width;
-            var clientHeight = ClientSize.Height;
+            int clientWidth = ClientSize.Width;
+            int clientHeight = ClientSize.Height;
             pnlHeader.Height = Math.Max(72, (int)(clientHeight * 0.085));
             pnlNavigation.Width = Math.Max(176, Math.Min(250, (int)(clientWidth * 0.12)));
             pnlStationHeader.Width = Math.Max(320, Math.Min(460, (int)(clientWidth * 0.24)));
@@ -90,8 +92,17 @@ namespace SiliconSteelAdhesionTester.Forms
             pnlBottom.Height = Math.Max(76, (int)(clientHeight * 0.09));
             PerformLayout();
 
-            var headerWidth = pnlHeader.ClientSize.Width;
-            var horizontalGap = Math.Max(8, lblMode.Width / 10);
+            int contentLeft = pnlNavigation.Right;
+            int contentTop = pnlFlow.Bottom;
+            int contentBottom = pnlBottom.Top;
+            pnlStationHeader.Bounds = new Rectangle(
+                contentLeft,
+                contentTop,
+                Math.Max(320, ClientSize.Width - contentLeft),
+                Math.Max(180, contentBottom - contentTop));
+
+            int headerWidth = pnlHeader.ClientSize.Width;
+            int horizontalGap = Math.Max(8, lblMode.Width / 10);
             lblTitle.Top = Math.Max(0, (pnlHeader.ClientSize.Height - lblTitle.Height) / 2);
             lblConnection.Top = Math.Max(0, (pnlHeader.ClientSize.Height - lblConnection.Height) / 2);
             lblMode.Left = headerWidth - lblMode.Width - horizontalGap;
@@ -111,7 +122,7 @@ namespace SiliconSteelAdhesionTester.Forms
             lblPermission.Left = lblUser.Left;
             lblPermission.Top = pnlHeader.ClientSize.Height / 2;
 
-            var overviewWidth = pnlOverview.ClientSize.Width;
+            int overviewWidth = pnlOverview.ClientSize.Width;
             if (overviewWidth > 0)
             {
                 lblShiftCount.Left = overviewWidth - lblShiftCount.Width - 24;
@@ -121,19 +132,19 @@ namespace SiliconSteelAdhesionTester.Forms
                 lblShiftCount.Top = lblTotalCount.Top;
             }
 
-            var flowWidth = pnlFlow.ClientSize.Width;
+            int flowWidth = pnlFlow.ClientSize.Width;
             if (flowWidth > 0)
             {
                 const int margin = 14;
                 const int gap = 6;
-                var nodeWidth = Math.Max(80, (flowWidth - margin * 2 - gap * 7) / 8);
-                for (var i = 0; i < _flowNodes.Length; i++)
+                int nodeWidth = Math.Max(80, (flowWidth - margin * 2 - gap * 7) / 8);
+                for (int i = 0; i < _flowNodes.Length; i++)
                 {
                     _flowNodes[i].Left = margin + i * (nodeWidth + gap);
                     _flowNodes[i].Width = nodeWidth;
                     _flowNodes[i].AutoEllipsis = true;
                 }
-                var messageTop = _flowNodes[0].Bottom + 6;
+                int messageTop = _flowNodes[0].Bottom + 6;
                 lblFlowMessage.AutoSize = false;
                 lblFlowMessage.Location = new Point(margin, messageTop);
                 lblFlowMessage.Size = new Size(Math.Max(180, flowWidth / 2), lblFlowMessage.PreferredHeight + 4);
@@ -148,30 +159,30 @@ namespace SiliconSteelAdhesionTester.Forms
                 pnlFlow.Height = Math.Max(pnlFlow.Height, messageTop + Math.Max(lblFlowMessage.Height, lblFlowLegend.Height) + 8);
             }
 
-            var processWidth = pnlProcess.ClientSize.Width;
-            var processHeight = pnlProcess.ClientSize.Height;
+            int processWidth = pnlProcess.ClientSize.Width;
+            int processHeight = pnlProcess.ClientSize.Height;
             if (processWidth > 0 && processHeight > 0)
             {
-                var steps = new[] { lblStep1, lblStep2, lblStep3, lblStep4 };
-                var statuses = new[] { lblStationStatus1, lblStationStatus2, lblStationStatus3, lblStationStatus4 };
-                var runLamps = new[] { pnlRun1, pnlRun2, pnlRun3, pnlRun4 };
-                var readyLamps = new[] { pnlReady1, pnlReady2, pnlReady3, pnlReady4 };
-                var doneLamps = new[] { pnlDone1, pnlDone2, pnlDone3, pnlDone4 };
-                var continuousButtons = new[] { btnS1Continuous, btnS2Continuous, btnS3Continuous, btnS4Continuous };
-                var startButtons = new[] { btnS1Start, btnS2Start, btnS3Start, btnS4Start };
-                var startLeft = processWidth - startButtons[0].Width - 14;
-                var continuousLeft = startLeft - continuousButtons[0].Width - 10;
-                var doneLeft = continuousLeft - doneLamps[0].Width - 18;
-                var readyLeft = doneLeft - readyLamps[0].Width - 10;
-                var runLeft = readyLeft - runLamps[0].Width - 10;
-                var statusLeft = steps[0].Right + 14;
-                var statusWidth = Math.Max(180, runLeft - statusLeft - 18);
-                var rowHeight = Math.Max(64, processHeight / 4);
-                for (var i = 0; i < 4; i++)
+                Label[] steps = new[] { lblStep1, lblStep2, lblStep3, lblStep4 };
+                Label[] statuses = new[] { lblStationStatus1, lblStationStatus2, lblStationStatus3, lblStationStatus4 };
+                Panel[] runLamps = new[] { pnlRun1, pnlRun2, pnlRun3, pnlRun4 };
+                Panel[] readyLamps = new[] { pnlReady1, pnlReady2, pnlReady3, pnlReady4 };
+                Panel[] doneLamps = new[] { pnlDone1, pnlDone2, pnlDone3, pnlDone4 };
+                Button[] continuousButtons = new[] { btnS1Continuous, btnS2Continuous, btnS3Continuous, btnS4Continuous };
+                Button[] startButtons = new[] { btnS1Start, btnS2Start, btnS3Start, btnS4Start };
+                int startLeft = processWidth - startButtons[0].Width - 14;
+                int continuousLeft = startLeft - continuousButtons[0].Width - 10;
+                int doneLeft = continuousLeft - doneLamps[0].Width - 18;
+                int readyLeft = doneLeft - readyLamps[0].Width - 10;
+                int runLeft = readyLeft - runLamps[0].Width - 10;
+                int statusLeft = steps[0].Right + 14;
+                int statusWidth = Math.Max(180, runLeft - statusLeft - 18);
+                int rowHeight = Math.Max(64, processHeight / 4);
+                for (int i = 0; i < 4; i++)
                 {
-                    var rowTop = i * rowHeight;
-                    var cardTop = rowTop + Math.Max(8, rowHeight / 10);
-                    var cardHeight = Math.Max(42, rowHeight - Math.Max(16, rowHeight / 5));
+                    int rowTop = i * rowHeight;
+                    int cardTop = rowTop + Math.Max(8, rowHeight / 10);
+                    int cardHeight = Math.Max(42, rowHeight - Math.Max(16, rowHeight / 5));
                     steps[i].Top = cardTop;
                     steps[i].Height = cardHeight;
                     statuses[i].Left = statusLeft;
@@ -193,57 +204,51 @@ namespace SiliconSteelAdhesionTester.Forms
                 }
             }
 
-            var navigationWidth = pnlNavigation.ClientSize.Width;
-            var navButtons = new[] { btnNavMonitor, btnNavVision, btnNavRecords, btnNavLogs, btnNavSettings };
-            var navTop = Math.Max(18, pnlNavigation.ClientSize.Height / 40);
-            var navHeight = Math.Max(48, Math.Min(64, pnlNavigation.ClientSize.Height / 13));
-            for (var i = 0; i < navButtons.Length; i++)
+            int navigationWidth = pnlNavigation.ClientSize.Width;
+            Button[] navButtons = _user != null && _user.CanDebug
+                ? new[] { btnNavMonitor, btnNavVision, btnDebug, btnNavRecords, btnNavLogs, btnNavSettings }
+                : new[] { btnNavMonitor, btnNavVision, btnNavRecords, btnNavLogs, btnNavSettings };
+            int navTop = Math.Max(18, pnlNavigation.ClientSize.Height / 40);
+            int navHeight = Math.Max(48, Math.Min(64, pnlNavigation.ClientSize.Height / 13));
+            for (int i = 0; i < navButtons.Length; i++)
             {
                 navButtons[i].Location = new Point(0, navTop + i * navHeight);
                 navButtons[i].Size = new Size(navigationWidth, navHeight);
+                navButtons[i].FlatStyle = FlatStyle.Flat;
+                navButtons[i].FlatAppearance.BorderSize = 0;
+                navButtons[i].BackColor = i == 0
+                    ? Color.FromArgb(38, 112, 190)
+                    : Color.FromArgb(25, 43, 63);
+                navButtons[i].ForeColor = Color.White;
             }
-            var utilityWidth = Math.Max(120, navigationWidth - 28);
-            btnVision.Location = new Point(14, navTop + navHeight * 6);
-            btnDebug.Location = new Point(14, navTop + navHeight * 7);
-            btnRecords.Location = new Point(14, navTop + navHeight * 8);
-            btnFaultLogs.Location = new Point(14, navTop + navHeight * 9);
-            btnVision.Width = utilityWidth;
-            btnDebug.Width = utilityWidth;
-            btnRecords.Width = utilityWidth;
-            btnFaultLogs.Width = utilityWidth;
+            btnVision.Visible = false;
+            btnRecords.Visible = false;
+            btnFaultLogs.Visible = false;
 
-            var commandButtons = new[] { btnManualMode, btnAutoMode, btnLineStart, btnLinePause, btnLineStop, btnLineHome, btnFaultReset };
-            var commandGap = 12;
-            var commandMargin = 20;
-            var commandWidth = Math.Max(86, (pnlBottom.ClientSize.Width - commandMargin * 2 - commandGap * 6) / 7);
-            var commandHeight = Math.Max(44, pnlBottom.ClientSize.Height - 24);
-            for (var i = 0; i < commandButtons.Length; i++)
+            Button[] commandButtons = new[] { btnManualMode, btnAutoMode, btnLineStart, btnLinePause, btnLineStop, btnLineHome, btnFaultReset };
+            int commandGap = 12;
+            int commandMargin = 20;
+            int commandWidth = Math.Max(86, (pnlBottom.ClientSize.Width - commandMargin * 2 - commandGap * 6) / 7);
+            int commandHeight = Math.Max(44, pnlBottom.ClientSize.Height - 24);
+            for (int i = 0; i < commandButtons.Length; i++)
             {
                 commandButtons[i].Location = new Point(commandMargin + i * (commandWidth + commandGap), (pnlBottom.ClientSize.Height - commandHeight) / 2);
                 commandButtons[i].Size = new Size(commandWidth, commandHeight);
             }
 
-            var rightHeight = pnlStationHeader.ClientSize.Height;
-            var sectionHeight = Math.Max(160, (rightHeight - lblQueueTitle.Height - lblLogTitle.Height) / 2);
+            int rightHeight = pnlStationHeader.ClientSize.Height;
+            int sectionHeight = Math.Max(160, (rightHeight - lblQueueTitle.Height - lblLogTitle.Height) / 2);
             dgvTasks.Height = sectionHeight;
 
             pnlBottom.BringToFront();
-            btnVision.ForeColor = Color.White;
-            btnDebug.ForeColor = Color.White;
-            btnRecords.ForeColor = Color.White;
-            btnFaultLogs.ForeColor = Color.White;
-            btnVision.BackColor = Color.FromArgb(38, 65, 91);
-            btnDebug.BackColor = Color.FromArgb(38, 65, 91);
-            btnRecords.BackColor = Color.FromArgb(38, 65, 91);
-            btnFaultLogs.BackColor = Color.FromArgb(38, 65, 91);
             ResumeLayout(true);
         }
 
         private void ApplyPermissions()
         {
             btnDebug.Visible = _user.CanDebug;
-            foreach (var button in _stationStarts) button.Enabled = _user.CanDebug;
-            foreach (var button in _stationContinuous) button.Enabled = _user.CanDebug;
+            foreach (Button button in _stationStarts) button.Enabled = _user.CanDebug;
+            foreach (Button button in _stationContinuous) button.Enabled = _user.CanDebug;
             lblPermission.Text = _user.CanDebug ? "调试功能已授权" : "操作员模式 · 手动调试受限";
         }
 
@@ -254,71 +259,107 @@ namespace SiliconSteelAdhesionTester.Forms
             catch (Exception ex) { ShowFault("PLC", "通讯", ex.Message); }
         }
 
-        private async Task RunBarcodeScannersAsync()
+        private async void BarcodeKeyPress(object sender, KeyPressEventArgs e)
         {
-            if (_barcodeScanners == null)
+            if (_barcodeScanner == null || (!_s2ScanAllowed && !_s3ScanAllowed))
             {
-                AppendRuntimeLog("二维码扫码功能已在配置中禁用");
                 return;
             }
 
-            AppendRuntimeLog("正在连接取向、无取向二维码扫码枪");
-            try
+            e.Handled = true;
+            BarcodeInputResult result = _barcodeScanner.Accept(e.KeyChar, DateTime.Now);
+            if (!result.HasResult) return;
+
+            if (_s2ScanAllowed && _s3ScanAllowed)
             {
-                await _barcodeScanners.StartAsync(_shutdown.Token);
+                AppendRuntimeLog("[SCANNER] S2与S3同时允许扫码，无法判断二维码所属工位，已拒绝");
+                return;
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
+
+            bool oriented = _s2ScanAllowed;
+            if ((oriented && _s2ScanResponseActive) ||
+                (!oriented && _s3ScanResponseActive))
+                return;
+
+            if (!result.Accepted)
             {
-                AppendRuntimeLog("[SCANNER] 扫码服务异常：" + ex.Message);
+                AppendRuntimeLog("[SCANNER] " + result.Message);
+                await SendScanResponseAsync(oriented, false);
+                return;
             }
+
+            RegisterBarcode(result.Barcode, oriented);
+            await SendScanResponseAsync(oriented, true);
         }
 
-        private void BarcodeScanned(object sender, BarcodeScannedEventArgs e)
+        private void RegisterBarcode(string barcode, bool oriented)
         {
-            if (IsDisposed || Disposing) return;
-            if (InvokeRequired)
-            {
-                BeginInvoke(new Action<object, BarcodeScannedEventArgs>(BarcodeScanned), sender, e);
-                return;
-            }
-
-            var type = e.Source == BarcodeScannerSource.Oriented ? "取向" : "无取向";
-            _lastScannedBarcode = e.Barcode;
-            lblBarcode.Text = e.Barcode;
-            lblCurrentTask.Text = "当前检验号 · 已扫码，等待总控任务";
+            string type = oriented ? "取向" : "无取向";
+            _lastScannedBarcode = barcode;
+            lblBarcode.Text = barcode;
+            lblCurrentTask.Text = "当前检验号 · 扫码完成，正在通知PLC";
             lblMaterialType.Text = type + "硅钢片";
 
             if (dgvTasks.Rows.Count == 1 &&
                 Convert.ToString(dgvTasks.Rows[0].Cells[0].Value) == "-")
                 dgvTasks.Rows.Clear();
-            dgvTasks.Rows.Insert(0, e.Barcode, type, "已扫码，等待总控");
+            dgvTasks.Rows.Insert(0, barcode, type, "扫码完成");
             while (dgvTasks.Rows.Count > 100)
                 dgvTasks.Rows.RemoveAt(dgvTasks.Rows.Count - 1);
 
-            AppendRuntimeLog("[" + type + "] 二维码扫描成功：" + e.Barcode);
-            _database.LogOperation(_user.UserName, "二维码扫描", type + "扫码枪：" + e.Barcode);
+            AppendRuntimeLog("[" + type + "] 二维码扫描成功：" + barcode);
+            _database.LogOperation(_user.UserName, "二维码扫描", type + "工位：" + barcode);
         }
 
-        private void ScannerStatusChanged(object sender, ScannerStatusEventArgs e)
+        private async Task SendScanResponseAsync(bool oriented, bool accepted)
         {
-            if (IsDisposed || Disposing) return;
-            if (InvokeRequired)
+            string done = oriented ? PlcAddresses.S2ScanDone : PlcAddresses.S3ScanDone;
+            string ok = oriented ? PlcAddresses.S2ScanOk : PlcAddresses.S3ScanOk;
+            string ng = oriented ? PlcAddresses.S2ScanNg : PlcAddresses.S3ScanNg;
+            try
             {
-                BeginInvoke(new Action<object, ScannerStatusEventArgs>(ScannerStatusChanged), sender, e);
-                return;
+                if (oriented) _s2ScanResponseActive = true;
+                else _s3ScanResponseActive = true;
+                await _plc.WriteAsync(ok, accepted, _shutdown.Token);
+                await _plc.WriteAsync(ng, !accepted, _shutdown.Token);
+                await _plc.WriteAsync(done, true, _shutdown.Token);
+                AppendRuntimeLog("[PLC] 已返回扫码完成/" + (accepted ? "OK" : "NG"));
             }
-            AppendRuntimeLog("[SCANNER] " + e.Message);
+            catch (Exception ex)
+            {
+                if (oriented) _s2ScanResponseActive = false;
+                else _s3ScanResponseActive = false;
+                AppendRuntimeLog("[SCANNER_PLC] 扫码结果写入PLC失败：" + ex.Message);
+            }
+        }
+
+        private async Task ResetScanResponseAsync(bool oriented)
+        {
+            string done = oriented ? PlcAddresses.S2ScanDone : PlcAddresses.S3ScanDone;
+            string ok = oriented ? PlcAddresses.S2ScanOk : PlcAddresses.S3ScanOk;
+            string ng = oriented ? PlcAddresses.S2ScanNg : PlcAddresses.S3ScanNg;
+            try
+            {
+                await _plc.WriteAsync(done, false, _shutdown.Token);
+                await _plc.WriteAsync(ok, false, _shutdown.Token);
+                await _plc.WriteAsync(ng, false, _shutdown.Token);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                AppendRuntimeLog("[SCANNER_PLC] 复位扫码应答失败：" + ex.Message);
+            }
         }
 
         private void PlcSnapshotChanged(object sender, PlcSnapshot snapshot)
         {
             if (InvokeRequired) { BeginInvoke(new Action<object, PlcSnapshot>(PlcSnapshotChanged), sender, snapshot); return; }
+            _latestSnapshot = snapshot;
             lblConnection.Text = snapshot.Connected ? "● PLC在线  " + (_settings.Simulation ? "仿真模式" : _settings.PlcIp) : "● PLC离线";
             lblConnection.ForeColor = snapshot.Connected ? Color.ForestGreen : Color.Firebrick;
             lblTotalCount.Text = snapshot.TotalCount.ToString("N0") + "  PCS";
             lblShiftCount.Text = snapshot.ShiftCount.ToString("N0") + "  PCS";
-            var currentBarcode = !string.IsNullOrWhiteSpace(snapshot.Barcode)
+            string currentBarcode = !string.IsNullOrWhiteSpace(snapshot.Barcode)
                 ? snapshot.Barcode
                 : _lastScannedBarcode;
             lblBarcode.Text = string.IsNullOrWhiteSpace(currentBarcode) ? "-" : currentBarcode;
@@ -331,16 +372,45 @@ namespace SiliconSteelAdhesionTester.Forms
             lblMode.BackColor = snapshot.Automatic ? Color.LimeGreen : Color.Gold;
             lblHome.Text = IsAllHome(snapshot) ? "在原位" : "未回原位";
             lblHome.BackColor = IsAllHome(snapshot) ? Color.LimeGreen : Color.OrangeRed;
+            UpdateScanPermission(snapshot);
             _automatic = snapshot.Automatic;
             UpdateFlow(snapshot);
             if (snapshot.Stations != null)
-                foreach (var station in snapshot.Stations) UpdateStation(station);
+                foreach (StationSnapshot station in snapshot.Stations) UpdateStation(station);
+        }
+
+        private void UpdateScanPermission(PlcSnapshot snapshot)
+        {
+            if (snapshot.S2ScanAllowed && !_s2ScanAllowed)
+            {
+                _barcodeScanner?.Reset();
+                AppendRuntimeLog("[SCANNER] PLC允许S2取向工位扫码");
+            }
+            if (snapshot.S3ScanAllowed && !_s3ScanAllowed)
+            {
+                _barcodeScanner?.Reset();
+                AppendRuntimeLog("[SCANNER] PLC允许S3无取向工位扫码");
+            }
+
+            _s2ScanAllowed = snapshot.S2ScanAllowed;
+            _s3ScanAllowed = snapshot.S3ScanAllowed;
+
+            if (!snapshot.S2ScanAllowed && _s2ScanResponseActive)
+            {
+                _s2ScanResponseActive = false;
+                _ = ResetScanResponseAsync(true);
+            }
+            if (!snapshot.S3ScanAllowed && _s3ScanResponseActive)
+            {
+                _s3ScanResponseActive = false;
+                _ = ResetScanResponseAsync(false);
+            }
         }
 
         private void UpdateFlow(PlcSnapshot snapshot)
         {
-            var current = Math.Max(0, Math.Min(_flowNodes.Length - 1, snapshot.FlowStepIndex));
-            for (var i = 0; i < _flowNodes.Length; i++)
+            int current = Math.Max(0, Math.Min(_flowNodes.Length - 1, snapshot.FlowStepIndex));
+            for (int i = 0; i < _flowNodes.Length; i++)
             {
                 if (snapshot.FlowFault && i == current)
                 {
@@ -369,7 +439,7 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private void UpdateStation(StationSnapshot snapshot)
         {
-            var index = snapshot.Number - 1;
+            int index = snapshot.Number - 1;
             _stationSteps[index].Text = snapshot.Step + " 步";
             _stationStatuses[index].Text = StationDescription(snapshot.Number, snapshot);
             _runLamps[index].BackColor = snapshot.Running ? Color.LimeGreen : Color.White;
@@ -382,7 +452,7 @@ namespace SiliconSteelAdhesionTester.Forms
         private static bool IsAllHome(PlcSnapshot snapshot)
         {
             if (snapshot.Stations == null || snapshot.Stations.Length == 0) return false;
-            foreach (var station in snapshot.Stations) if (!station.Home) return false;
+            foreach (StationSnapshot station in snapshot.Stations) if (!station.Home) return false;
             return true;
         }
 
@@ -416,7 +486,7 @@ namespace SiliconSteelAdhesionTester.Forms
         private void AppendRuntimeLog(string message)
         {
             if (txtRuntimeLog == null) return;
-            var line = DateTime.Now.ToString("HH:mm:ss.fff") + "  " + message;
+            string line = DateTime.Now.ToString("HH:mm:ss.fff") + "  " + message;
             if (string.IsNullOrWhiteSpace(txtRuntimeLog.Text) || txtRuntimeLog.Text.StartsWith("系统启动"))
                 txtRuntimeLog.Text = line;
             else
@@ -435,18 +505,14 @@ namespace SiliconSteelAdhesionTester.Forms
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing)
+            if (disposing && !_resourcesDisposed)
             {
+                _resourcesDisposed = true;
                 _shutdown.Cancel();
                 _shutdown.Dispose();
-                if (_barcodeScanners != null)
-                {
-                    _barcodeScanners.BarcodeScanned -= BarcodeScanned;
-                    _barcodeScanners.StatusChanged -= ScannerStatusChanged;
-                    _barcodeScanners.Dispose();
-                }
-                if (_plc != null) _plc.Dispose();
-                if (components != null) components.Dispose();
+                KeyPress -= BarcodeKeyPress;
+                _plc?.Dispose();
+                components?.Dispose();
             }
             base.Dispose(disposing);
         }

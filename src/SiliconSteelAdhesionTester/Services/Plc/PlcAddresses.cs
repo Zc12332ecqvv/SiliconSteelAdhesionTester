@@ -3,6 +3,7 @@ namespace SiliconSteelAdhesionTester.Services.Plc
     // PLC 地址来自《PC交互表20260708.xlsx》，采用 S7.NET 的 DBX/DBW/DBD 表达法。
     public static class PlcAddresses
     {
+        public const string LineRunningCondition = "DB4120.DBX36.0";
         public const string AutoMode = "DB5120.DBX62.1";       // 表中注明“取反”
         public const string EmergencyStop = "DB5120.DBX62.3"; // 表中注明“取反”
         public const string ResetPulse = "DB5120.DBX62.4";
@@ -31,6 +32,9 @@ namespace SiliconSteelAdhesionTester.Services.Plc
         public const string S2CameraOk = "DB4120.DBX576.1";
         public const string S2CameraNg = "DB4120.DBX576.2";
         public const string S3ScanAllowed = "DB4120.DBX844.3";
+        public const string S3ScanDone = "DB4120.DBX842.3";
+        public const string S3ScanOk = "DB4120.DBX842.4";
+        public const string S3ScanNg = "DB4120.DBX842.5";
         public const string S4CameraAllowed = "DB4120.DBX1110.0";
     }
 }

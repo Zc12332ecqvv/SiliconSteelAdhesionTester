@@ -28,8 +28,8 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                 try
                 {
                     if (!_plc.IsConnected) await _plc.OpenAsync(cancellationToken).ConfigureAwait(false);
-                    var stations = new StationSnapshot[4];
-                    for (var i = 1; i <= 4; i++)
+                    StationSnapshot[] stations = new StationSnapshot[4];
+                    for (int i = 1; i <= 4; i++)
                     {
                         stations[i - 1] = new StationSnapshot
                         {
@@ -41,9 +41,10 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                         };
                         stations[i - 1].Running = stations[i - 1].Step > 0 && !stations[i - 1].Done;
                     }
-                    var autoM = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.AutoMode, cancellationToken).ConfigureAwait(false));
-                    var eStop = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.EmergencyStop, cancellationToken).ConfigureAwait(false));
-                    var handler = SnapshotChanged;
+                    bool autoM = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.AutoMode, cancellationToken).ConfigureAwait(false));
+                    bool eStop = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.EmergencyStop, cancellationToken).ConfigureAwait(false));
+                    bool lineRunning = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.LineRunningCondition, cancellationToken).ConfigureAwait(false));
+                    EventHandler<PlcSnapshot> handler = SnapshotChanged;
                     if (handler != null) handler(this, new PlcSnapshot
                     {
                         Connected = true,
@@ -52,13 +53,15 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                         EmergencyStop = !eStop,
                         Stations = stations,
                         FlowStepIndex = InferFlowStep(stations),
-                        FlowPaused = false,
+                        FlowPaused = !lineRunning,
+                        S2ScanAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2ScanAllowed, cancellationToken).ConfigureAwait(false)),
+                        S3ScanAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S3ScanAllowed, cancellationToken).ConfigureAwait(false)),
                         FlowMessage = "实体PLC流程状态（根据四工位自动步骤推算）"
                     });
                 }
                 catch (Exception ex)
                 {
-                    var handler = CommunicationFault;
+                    EventHandler<string> handler = CommunicationFault;
                     if (handler != null) handler(this, ex.Message);
                     try { _plc.Close(); } catch { }
                 }
@@ -92,8 +95,8 @@ namespace SiliconSteelAdhesionTester.Services.Plc
 
         private static int InferFlowStep(StationSnapshot[] stations)
         {
-            var maxStep = 0;
-            foreach (var station in stations) if (station.Step > maxStep) maxStep = station.Step;
+            int maxStep = 0;
+            foreach (StationSnapshot station in stations) if (station.Step > maxStep) maxStep = station.Step;
             return maxStep % 8;
         }
     }
