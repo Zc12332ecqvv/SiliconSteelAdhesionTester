@@ -102,6 +102,9 @@
     <Compile Include="Forms\MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Forms\ManualTaskForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Forms\MainForm.Commands.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
       <SubType>Form</SubType>
@@ -118,8 +121,7 @@
     <Compile Include="Models\Domain.cs" />
     <Compile Include="Configuration\AppSettings.cs" />
     <Compile Include="Services\Plc\IPlcService.cs" />
-    <Compile Include="Services\Scanner\BarcodeScannerModels.cs" />
-    <Compile Include="Services\Scanner\TcpBarcodeScannerService.cs" />
+    <Compile Include="Services\Scanner\KeyboardBarcodeScanner.cs" />
     <Compile Include="Services\Vision\AdhesionVisionService.cs" />
     <Compile Include="Services\Vision\IAdhesionVisionService.cs" />
     <Compile Include="Services\Plc\PlcAddresses.cs" />

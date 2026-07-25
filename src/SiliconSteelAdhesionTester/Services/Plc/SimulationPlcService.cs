@@ -86,6 +86,8 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     ShiftCount = _completedCount,
                     FlowStepIndex = _flowStep,
                     FlowPaused = !_lineRunning || _linePaused,
+                    S2ScanAllowed = GetBool(PlcAddresses.S2ScanAllowed),
+                    S3ScanAllowed = GetBool(PlcAddresses.S3ScanAllowed),
                     FlowMessage = FlowDescription(_flowStep, _lineRunning, _linePaused)
                 });
                 await Task.Delay(_settings.PollIntervalMs, cancellationToken).ConfigureAwait(false);

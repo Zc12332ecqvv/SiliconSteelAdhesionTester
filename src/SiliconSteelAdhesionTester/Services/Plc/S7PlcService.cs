@@ -43,6 +43,7 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     }
                     var autoM = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.AutoMode, cancellationToken).ConfigureAwait(false));
                     var eStop = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.EmergencyStop, cancellationToken).ConfigureAwait(false));
+                    var lineRunning = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.LineRunningCondition, cancellationToken).ConfigureAwait(false));
                     var handler = SnapshotChanged;
                     if (handler != null) handler(this, new PlcSnapshot
                     {
@@ -52,7 +53,9 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                         EmergencyStop = !eStop,
                         Stations = stations,
                         FlowStepIndex = InferFlowStep(stations),
-                        FlowPaused = false,
+                        FlowPaused = !lineRunning,
+                        S2ScanAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2ScanAllowed, cancellationToken).ConfigureAwait(false)),
+                        S3ScanAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S3ScanAllowed, cancellationToken).ConfigureAwait(false)),
                         FlowMessage = "实体PLC流程状态（根据四工位自动步骤推算）"
                     });
                 }

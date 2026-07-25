@@ -28,8 +28,14 @@ namespace SiliconSteelAdhesionTester.Forms
         private Button[] _stationContinuous;
         private bool _automatic;
         private Label[] _flowNodes;
-        private TcpBarcodeScannerService _barcodeScanners;
+        private KeyboardBarcodeScanner _barcodeScanner;
         private string _lastScannedBarcode;
+        private bool _s2ScanAllowed;
+        private bool _s3ScanAllowed;
+        private bool _s2ScanResponseActive;
+        private bool _s3ScanResponseActive;
+        private PlcSnapshot _latestSnapshot;
+        private bool _resourcesDisposed;
 
         public MainForm()
         {
@@ -45,27 +51,23 @@ namespace SiliconSteelAdhesionTester.Forms
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             if (_settings.BarcodeScannerEnabled)
             {
-                _barcodeScanners = new TcpBarcodeScannerService(
-                    new BarcodeScannerEndpoint(
-                        BarcodeScannerSource.Oriented,
-                        _settings.OrientedScannerIp,
-                        _settings.OrientedScannerPort),
-                    new BarcodeScannerEndpoint(
-                        BarcodeScannerSource.NonOriented,
-                        _settings.NonOrientedScannerIp,
-                        _settings.NonOrientedScannerPort),
-                    _settings.DuplicateBarcodeSeconds,
-                    _settings.ScannerReconnectDelayMs);
-                _barcodeScanners.BarcodeScanned += BarcodeScanned;
-                _barcodeScanners.StatusChanged += ScannerStatusChanged;
+                _barcodeScanner = new KeyboardBarcodeScanner(
+                    _settings.BarcodeInputTimeoutMs,
+                    _settings.BarcodeMinimumLength,
+                    _settings.DuplicateBarcodeSeconds);
+                KeyPreview = true;
+                KeyPress += BarcodeKeyPress;
             }
             InitializeRuntimeBindings();
+            pnlProcess.Visible = false;
+            pnlStationHeader.Dock = DockStyle.None;
+            pnlStationHeader.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            pnlStationHeader.BringToFront();
             ApplyResponsiveLayout();
             ApplyPermissions();
             _plc.SnapshotChanged += PlcSnapshotChanged;
             _plc.CommunicationFault += PlcCommunicationFault;
             Shown += async (s, e) => await RunPlcAsync();
-            Shown += async (s, e) => await RunBarcodeScannersAsync();
             Shown += (s, e) =>
             {
                 MaximizedBounds = Screen.FromHandle(Handle).WorkingArea;
@@ -89,6 +91,15 @@ namespace SiliconSteelAdhesionTester.Forms
             pnlFlow.Height = Math.Max(100, (int)(clientHeight * 0.115));
             pnlBottom.Height = Math.Max(76, (int)(clientHeight * 0.09));
             PerformLayout();
+
+            var contentLeft = pnlNavigation.Right;
+            var contentTop = pnlFlow.Bottom;
+            var contentBottom = pnlBottom.Top;
+            pnlStationHeader.Bounds = new Rectangle(
+                contentLeft,
+                contentTop,
+                Math.Max(320, ClientSize.Width - contentLeft),
+                Math.Max(180, contentBottom - contentTop));
 
             var headerWidth = pnlHeader.ClientSize.Width;
             var horizontalGap = Math.Max(8, lblMode.Width / 10);
@@ -194,23 +205,25 @@ namespace SiliconSteelAdhesionTester.Forms
             }
 
             var navigationWidth = pnlNavigation.ClientSize.Width;
-            var navButtons = new[] { btnNavMonitor, btnNavVision, btnNavRecords, btnNavLogs, btnNavSettings };
+            var navButtons = _user != null && _user.CanDebug
+                ? new[] { btnNavMonitor, btnNavVision, btnDebug, btnNavRecords, btnNavLogs, btnNavSettings }
+                : new[] { btnNavMonitor, btnNavVision, btnNavRecords, btnNavLogs, btnNavSettings };
             var navTop = Math.Max(18, pnlNavigation.ClientSize.Height / 40);
             var navHeight = Math.Max(48, Math.Min(64, pnlNavigation.ClientSize.Height / 13));
             for (var i = 0; i < navButtons.Length; i++)
             {
                 navButtons[i].Location = new Point(0, navTop + i * navHeight);
                 navButtons[i].Size = new Size(navigationWidth, navHeight);
+                navButtons[i].FlatStyle = FlatStyle.Flat;
+                navButtons[i].FlatAppearance.BorderSize = 0;
+                navButtons[i].BackColor = i == 0
+                    ? Color.FromArgb(38, 112, 190)
+                    : Color.FromArgb(25, 43, 63);
+                navButtons[i].ForeColor = Color.White;
             }
-            var utilityWidth = Math.Max(120, navigationWidth - 28);
-            btnVision.Location = new Point(14, navTop + navHeight * 6);
-            btnDebug.Location = new Point(14, navTop + navHeight * 7);
-            btnRecords.Location = new Point(14, navTop + navHeight * 8);
-            btnFaultLogs.Location = new Point(14, navTop + navHeight * 9);
-            btnVision.Width = utilityWidth;
-            btnDebug.Width = utilityWidth;
-            btnRecords.Width = utilityWidth;
-            btnFaultLogs.Width = utilityWidth;
+            btnVision.Visible = false;
+            btnRecords.Visible = false;
+            btnFaultLogs.Visible = false;
 
             var commandButtons = new[] { btnManualMode, btnAutoMode, btnLineStart, btnLinePause, btnLineStop, btnLineHome, btnFaultReset };
             var commandGap = 12;
@@ -228,14 +241,6 @@ namespace SiliconSteelAdhesionTester.Forms
             dgvTasks.Height = sectionHeight;
 
             pnlBottom.BringToFront();
-            btnVision.ForeColor = Color.White;
-            btnDebug.ForeColor = Color.White;
-            btnRecords.ForeColor = Color.White;
-            btnFaultLogs.ForeColor = Color.White;
-            btnVision.BackColor = Color.FromArgb(38, 65, 91);
-            btnDebug.BackColor = Color.FromArgb(38, 65, 91);
-            btnRecords.BackColor = Color.FromArgb(38, 65, 91);
-            btnFaultLogs.BackColor = Color.FromArgb(38, 65, 91);
             ResumeLayout(true);
         }
 
@@ -254,66 +259,102 @@ namespace SiliconSteelAdhesionTester.Forms
             catch (Exception ex) { ShowFault("PLC", "通讯", ex.Message); }
         }
 
-        private async Task RunBarcodeScannersAsync()
+        private async void BarcodeKeyPress(object sender, KeyPressEventArgs e)
         {
-            if (_barcodeScanners == null)
+            if (_barcodeScanner == null || (!_s2ScanAllowed && !_s3ScanAllowed))
             {
-                AppendRuntimeLog("二维码扫码功能已在配置中禁用");
                 return;
             }
 
-            AppendRuntimeLog("正在连接取向、无取向二维码扫码枪");
-            try
+            e.Handled = true;
+            var result = _barcodeScanner.Accept(e.KeyChar, DateTime.Now);
+            if (!result.HasResult) return;
+
+            if (_s2ScanAllowed && _s3ScanAllowed)
             {
-                await _barcodeScanners.StartAsync(_shutdown.Token);
+                AppendRuntimeLog("[SCANNER] S2与S3同时允许扫码，无法判断二维码所属工位，已拒绝");
+                return;
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
+
+            var oriented = _s2ScanAllowed;
+            if ((oriented && _s2ScanResponseActive) ||
+                (!oriented && _s3ScanResponseActive))
+                return;
+
+            if (!result.Accepted)
             {
-                AppendRuntimeLog("[SCANNER] 扫码服务异常：" + ex.Message);
+                AppendRuntimeLog("[SCANNER] " + result.Message);
+                await SendScanResponseAsync(oriented, false);
+                return;
             }
+
+            RegisterBarcode(result.Barcode, oriented);
+            await SendScanResponseAsync(oriented, true);
         }
 
-        private void BarcodeScanned(object sender, BarcodeScannedEventArgs e)
+        private void RegisterBarcode(string barcode, bool oriented)
         {
-            if (IsDisposed || Disposing) return;
-            if (InvokeRequired)
-            {
-                BeginInvoke(new Action<object, BarcodeScannedEventArgs>(BarcodeScanned), sender, e);
-                return;
-            }
-
-            var type = e.Source == BarcodeScannerSource.Oriented ? "取向" : "无取向";
-            _lastScannedBarcode = e.Barcode;
-            lblBarcode.Text = e.Barcode;
-            lblCurrentTask.Text = "当前检验号 · 已扫码，等待总控任务";
+            var type = oriented ? "取向" : "无取向";
+            _lastScannedBarcode = barcode;
+            lblBarcode.Text = barcode;
+            lblCurrentTask.Text = "当前检验号 · 扫码完成，正在通知PLC";
             lblMaterialType.Text = type + "硅钢片";
 
             if (dgvTasks.Rows.Count == 1 &&
                 Convert.ToString(dgvTasks.Rows[0].Cells[0].Value) == "-")
                 dgvTasks.Rows.Clear();
-            dgvTasks.Rows.Insert(0, e.Barcode, type, "已扫码，等待总控");
+            dgvTasks.Rows.Insert(0, barcode, type, "扫码完成");
             while (dgvTasks.Rows.Count > 100)
                 dgvTasks.Rows.RemoveAt(dgvTasks.Rows.Count - 1);
 
-            AppendRuntimeLog("[" + type + "] 二维码扫描成功：" + e.Barcode);
-            _database.LogOperation(_user.UserName, "二维码扫描", type + "扫码枪：" + e.Barcode);
+            AppendRuntimeLog("[" + type + "] 二维码扫描成功：" + barcode);
+            _database.LogOperation(_user.UserName, "二维码扫描", type + "工位：" + barcode);
         }
 
-        private void ScannerStatusChanged(object sender, ScannerStatusEventArgs e)
+        private async Task SendScanResponseAsync(bool oriented, bool accepted)
         {
-            if (IsDisposed || Disposing) return;
-            if (InvokeRequired)
+            var done = oriented ? PlcAddresses.S2ScanDone : PlcAddresses.S3ScanDone;
+            var ok = oriented ? PlcAddresses.S2ScanOk : PlcAddresses.S3ScanOk;
+            var ng = oriented ? PlcAddresses.S2ScanNg : PlcAddresses.S3ScanNg;
+            try
             {
-                BeginInvoke(new Action<object, ScannerStatusEventArgs>(ScannerStatusChanged), sender, e);
-                return;
+                if (oriented) _s2ScanResponseActive = true;
+                else _s3ScanResponseActive = true;
+                await _plc.WriteAsync(ok, accepted, _shutdown.Token);
+                await _plc.WriteAsync(ng, !accepted, _shutdown.Token);
+                await _plc.WriteAsync(done, true, _shutdown.Token);
+                AppendRuntimeLog("[PLC] 已返回扫码完成/" + (accepted ? "OK" : "NG"));
             }
-            AppendRuntimeLog("[SCANNER] " + e.Message);
+            catch (Exception ex)
+            {
+                if (oriented) _s2ScanResponseActive = false;
+                else _s3ScanResponseActive = false;
+                AppendRuntimeLog("[SCANNER_PLC] 扫码结果写入PLC失败：" + ex.Message);
+            }
+        }
+
+        private async Task ResetScanResponseAsync(bool oriented)
+        {
+            var done = oriented ? PlcAddresses.S2ScanDone : PlcAddresses.S3ScanDone;
+            var ok = oriented ? PlcAddresses.S2ScanOk : PlcAddresses.S3ScanOk;
+            var ng = oriented ? PlcAddresses.S2ScanNg : PlcAddresses.S3ScanNg;
+            try
+            {
+                await _plc.WriteAsync(done, false, _shutdown.Token);
+                await _plc.WriteAsync(ok, false, _shutdown.Token);
+                await _plc.WriteAsync(ng, false, _shutdown.Token);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                AppendRuntimeLog("[SCANNER_PLC] 复位扫码应答失败：" + ex.Message);
+            }
         }
 
         private void PlcSnapshotChanged(object sender, PlcSnapshot snapshot)
         {
             if (InvokeRequired) { BeginInvoke(new Action<object, PlcSnapshot>(PlcSnapshotChanged), sender, snapshot); return; }
+            _latestSnapshot = snapshot;
             lblConnection.Text = snapshot.Connected ? "● PLC在线  " + (_settings.Simulation ? "仿真模式" : _settings.PlcIp) : "● PLC离线";
             lblConnection.ForeColor = snapshot.Connected ? Color.ForestGreen : Color.Firebrick;
             lblTotalCount.Text = snapshot.TotalCount.ToString("N0") + "  PCS";
@@ -331,10 +372,39 @@ namespace SiliconSteelAdhesionTester.Forms
             lblMode.BackColor = snapshot.Automatic ? Color.LimeGreen : Color.Gold;
             lblHome.Text = IsAllHome(snapshot) ? "在原位" : "未回原位";
             lblHome.BackColor = IsAllHome(snapshot) ? Color.LimeGreen : Color.OrangeRed;
+            UpdateScanPermission(snapshot);
             _automatic = snapshot.Automatic;
             UpdateFlow(snapshot);
             if (snapshot.Stations != null)
                 foreach (var station in snapshot.Stations) UpdateStation(station);
+        }
+
+        private void UpdateScanPermission(PlcSnapshot snapshot)
+        {
+            if (snapshot.S2ScanAllowed && !_s2ScanAllowed)
+            {
+                _barcodeScanner?.Reset();
+                AppendRuntimeLog("[SCANNER] PLC允许S2取向工位扫码");
+            }
+            if (snapshot.S3ScanAllowed && !_s3ScanAllowed)
+            {
+                _barcodeScanner?.Reset();
+                AppendRuntimeLog("[SCANNER] PLC允许S3无取向工位扫码");
+            }
+
+            _s2ScanAllowed = snapshot.S2ScanAllowed;
+            _s3ScanAllowed = snapshot.S3ScanAllowed;
+
+            if (!snapshot.S2ScanAllowed && _s2ScanResponseActive)
+            {
+                _s2ScanResponseActive = false;
+                _ = ResetScanResponseAsync(true);
+            }
+            if (!snapshot.S3ScanAllowed && _s3ScanResponseActive)
+            {
+                _s3ScanResponseActive = false;
+                _ = ResetScanResponseAsync(false);
+            }
         }
 
         private void UpdateFlow(PlcSnapshot snapshot)
@@ -435,16 +505,12 @@ namespace SiliconSteelAdhesionTester.Forms
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing)
+            if (disposing && !_resourcesDisposed)
             {
+                _resourcesDisposed = true;
                 _shutdown.Cancel();
                 _shutdown.Dispose();
-                if (_barcodeScanners != null)
-                {
-                    _barcodeScanners.BarcodeScanned -= BarcodeScanned;
-                    _barcodeScanners.StatusChanged -= ScannerStatusChanged;
-                    _barcodeScanners.Dispose();
-                }
+                KeyPress -= BarcodeKeyPress;
                 if (_plc != null) _plc.Dispose();
                 if (components != null) components.Dispose();
             }

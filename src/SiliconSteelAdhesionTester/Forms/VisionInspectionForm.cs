@@ -14,14 +14,14 @@ namespace SiliconSteelAdhesionTester.Forms
         public VisionInspectionForm()
         {
             InitializeComponent();
-            cboMode.SelectedIndex = 0;
-            UpdateMode();
         }
 
         public VisionInspectionForm(IAdhesionVisionService vision)
             : this()
         {
             _vision = vision ?? throw new ArgumentNullException(nameof(vision));
+            cboMode.SelectedIndex = 0;
+            UpdateMode();
         }
 
         private void cboMode_SelectedIndexChanged(object sender, EventArgs e)

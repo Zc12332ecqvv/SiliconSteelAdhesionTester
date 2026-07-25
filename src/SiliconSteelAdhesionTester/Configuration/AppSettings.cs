@@ -11,11 +11,8 @@ namespace SiliconSteelAdhesionTester.Configuration
         public int CommandPulseMs { get; private set; }
         public int DuplicateBarcodeSeconds { get; private set; }
         public bool BarcodeScannerEnabled { get; private set; }
-        public string OrientedScannerIp { get; private set; }
-        public int OrientedScannerPort { get; private set; }
-        public string NonOrientedScannerIp { get; private set; }
-        public int NonOrientedScannerPort { get; private set; }
-        public int ScannerReconnectDelayMs { get; private set; }
+        public int BarcodeInputTimeoutMs { get; private set; }
+        public int BarcodeMinimumLength { get; private set; }
         public double OrientedMaxLossRate { get; private set; }
         public double NonOrientedMaxLossRate { get; private set; }
         public int VisionDifferenceThreshold { get; private set; }
@@ -34,11 +31,8 @@ namespace SiliconSteelAdhesionTester.Configuration
                 CommandPulseMs = int.Parse(Read("CommandPulseMs", "300")),
                 DuplicateBarcodeSeconds = int.Parse(Read("DuplicateBarcodeSeconds", "30")),
                 BarcodeScannerEnabled = bool.Parse(Read("BarcodeScannerEnabled", "true")),
-                OrientedScannerIp = Read("OrientedScannerIp", "192.168.0.113"),
-                OrientedScannerPort = int.Parse(Read("OrientedScannerPort", "9004")),
-                NonOrientedScannerIp = Read("NonOrientedScannerIp", "192.168.0.112"),
-                NonOrientedScannerPort = int.Parse(Read("NonOrientedScannerPort", "9004")),
-                ScannerReconnectDelayMs = int.Parse(Read("ScannerReconnectDelayMs", "3000")),
+                BarcodeInputTimeoutMs = int.Parse(Read("BarcodeInputTimeoutMs", "120")),
+                BarcodeMinimumLength = int.Parse(Read("BarcodeMinimumLength", "4")),
                 OrientedMaxLossRate = double.Parse(Read("OrientedMaxLossRate", "3.0"), System.Globalization.CultureInfo.InvariantCulture),
                 NonOrientedMaxLossRate = double.Parse(Read("NonOrientedMaxLossRate", "3.0"), System.Globalization.CultureInfo.InvariantCulture),
                 VisionDifferenceThreshold = int.Parse(Read("VisionDifferenceThreshold", "28")),
