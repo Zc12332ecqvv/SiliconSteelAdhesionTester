@@ -1,0 +1,244 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Globalization;
+using System.IO;
+using OpenCvSharp;
+using SiliconSteelAdhesionTester.Configuration;
+
+namespace SiliconSteelAdhesionTester.Services.Vision
+{
+    /// <summary>
+    /// 固定相机、固定光源条件下的硅钢片涂层脱落率检测。
+    /// 取向材料比较压弯前后图像；非取向材料统计胶带上的脱落颗粒。
+    /// </summary>
+    public sealed class AdhesionVisionService : IAdhesionVisionService
+    {
+        private readonly AppSettings _settings;
+
+        public AdhesionVisionService(AppSettings settings)
+        {
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        }
+
+        public AdhesionVisionResult AnalyzeOriented(
+            string beforeBendingImagePath,
+            string afterBendingImagePath,
+            Rectangle? inspectionRegion = null,
+            string sampleId = null)
+        {
+            using (var before = LoadColor(beforeBendingImagePath))
+            using (var afterOriginal = LoadColor(afterBendingImagePath))
+            using (var after = new Mat())
+            {
+                Cv2.Resize(afterOriginal, after, before.Size());
+                var roi = ResolveRegion(before.Size(), inspectionRegion);
+
+                using (var beforeRoi = new Mat(before, roi))
+                using (var afterRoi = new Mat(after, roi))
+                using (var beforeLab = new Mat())
+                using (var afterLab = new Mat())
+                using (var difference = new Mat())
+                using (var mask = new Mat())
+                {
+                    Cv2.CvtColor(beforeRoi, beforeLab, ColorConversionCodes.BGR2Lab);
+                    Cv2.CvtColor(afterRoi, afterLab, ColorConversionCodes.BGR2Lab);
+                    Cv2.GaussianBlur(beforeLab, beforeLab, new OpenCvSharp.Size(5, 5), 0);
+                    Cv2.GaussianBlur(afterLab, afterLab, new OpenCvSharp.Size(5, 5), 0);
+                    Cv2.Absdiff(beforeLab, afterLab, difference);
+                    var channels = Cv2.Split(difference);
+                    try
+                    {
+                        channels[0].CopyTo(mask);
+                        Cv2.Max(mask, channels[1], mask);
+                        Cv2.Max(mask, channels[2], mask);
+                        Cv2.Threshold(mask, mask, _settings.VisionDifferenceThreshold, 255, ThresholdTypes.Binary);
+                    }
+                    finally
+                    {
+                        foreach (var channel in channels) channel.Dispose();
+                    }
+
+                    var particleCount = CleanAndCount(mask);
+                    return SaveResult(
+                        AdhesionTestType.OrientedBeforeAfter,
+                        after,
+                        roi,
+                        mask,
+                        particleCount,
+                        _settings.OrientedMaxLossRate,
+                        sampleId,
+                        "压弯前后图像差异");
+                }
+            }
+        }
+
+        public AdhesionVisionResult AnalyzeNonOrientedTape(
+            string tapeImagePath,
+            Rectangle? inspectionRegion = null,
+            string sampleId = null)
+        {
+            using (var tape = LoadColor(tapeImagePath))
+            {
+                var roi = ResolveRegion(tape.Size(), inspectionRegion);
+                using (var tapeRoi = new Mat(tape, roi))
+                using (var gray = new Mat())
+                using (var background = new Mat())
+                using (var difference = new Mat())
+                using (var mask = new Mat())
+                using (var backgroundKernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(51, 51)))
+                {
+                    Cv2.CvtColor(tapeRoi, gray, ColorConversionCodes.BGR2GRAY);
+                    Cv2.GaussianBlur(gray, gray, new OpenCvSharp.Size(5, 5), 0);
+
+                    // 大尺度闭运算填平深色颗粒以估计胶带背景。
+                    Cv2.MorphologyEx(gray, background, MorphTypes.Close, backgroundKernel);
+                    Cv2.Absdiff(gray, background, difference);
+                    Cv2.Threshold(difference, mask, _settings.VisionDifferenceThreshold, 255, ThresholdTypes.Binary);
+
+                    var particleCount = CleanAndCount(mask);
+                    return SaveResult(
+                        AdhesionTestType.NonOrientedTape,
+                        tape,
+                        roi,
+                        mask,
+                        particleCount,
+                        _settings.NonOrientedMaxLossRate,
+                        sampleId,
+                        "胶带脱落颗粒面积");
+                }
+            }
+        }
+
+        private int CleanAndCount(Mat mask)
+        {
+            using (var kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(3, 3)))
+            {
+                Cv2.MorphologyEx(mask, mask, MorphTypes.Open, kernel);
+                Cv2.MorphologyEx(mask, mask, MorphTypes.Close, kernel);
+            }
+
+            OpenCvSharp.Point[][] contours;
+            HierarchyIndex[] hierarchy;
+            Cv2.FindContours(mask.Clone(), out contours, out hierarchy, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+
+            mask.SetTo(Scalar.Black);
+            var accepted = new List<OpenCvSharp.Point[]>();
+            foreach (var contour in contours)
+            {
+                if (Cv2.ContourArea(contour) >= _settings.VisionMinimumParticleArea)
+                    accepted.Add(contour);
+            }
+
+            if (accepted.Count > 0)
+                Cv2.DrawContours(mask, accepted, -1, Scalar.White, -1);
+            return accepted.Count;
+        }
+
+        private AdhesionVisionResult SaveResult(
+            AdhesionTestType testType,
+            Mat source,
+            Rect roi,
+            Mat roiMask,
+            int particleCount,
+            double maximumLossRate,
+            string sampleId,
+            string method)
+        {
+            var defectPixels = Cv2.CountNonZero(roiMask);
+            var inspectionPixels = roi.Width * roi.Height;
+            var lossRate = inspectionPixels == 0 ? 0 : defectPixels * 100.0 / inspectionPixels;
+            var qualified = lossRate <= maximumLossRate;
+
+            var safeId = MakeSafeFileName(string.IsNullOrWhiteSpace(sampleId)
+                ? DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture)
+                : sampleId);
+            var outputDirectory = Path.GetFullPath(_settings.VisionOutputDirectory);
+            var prefix = testType == AdhesionTestType.OrientedBeforeAfter ? "oriented" : "nonoriented_tape";
+            var categoryDirectory = Path.Combine(
+                outputDirectory,
+                testType == AdhesionTestType.OrientedBeforeAfter ? "oriented" : "non-oriented");
+            var maskDirectory = Path.Combine(categoryDirectory, "mask");
+            var markedDirectory = Path.Combine(categoryDirectory, "marked");
+            Directory.CreateDirectory(maskDirectory);
+            Directory.CreateDirectory(markedDirectory);
+            var maskPath = Path.Combine(maskDirectory, prefix + "_" + safeId + "_mask.png");
+            var annotatedPath = Path.Combine(markedDirectory, prefix + "_" + safeId + "_marked.jpg");
+
+            using (var fullMask = Mat.Zeros(source.Size(), MatType.CV_8UC1).ToMat())
+            using (var target = new Mat(fullMask, roi))
+            using (var annotated = source.Clone())
+            {
+                roiMask.CopyTo(target);
+                OpenCvSharp.Point[][] contours;
+                HierarchyIndex[] hierarchy;
+                Cv2.FindContours(fullMask.Clone(), out contours, out hierarchy, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+                Cv2.DrawContours(annotated, contours, -1, Scalar.Red, 2);
+                Cv2.Rectangle(annotated, roi, qualified ? Scalar.LimeGreen : Scalar.Red, 2);
+                Cv2.PutText(
+                    annotated,
+                    "Loss: " + lossRate.ToString("F3", CultureInfo.InvariantCulture) + "%  " + (qualified ? "OK" : "NG"),
+                    new OpenCvSharp.Point(roi.X + 10, Math.Max(30, roi.Y + 30)),
+                    HersheyFonts.HersheySimplex,
+                    0.8,
+                    qualified ? Scalar.LimeGreen : Scalar.Red,
+                    2);
+                Cv2.ImWrite(maskPath, fullMask);
+                Cv2.ImWrite(annotatedPath, annotated);
+            }
+
+            return new AdhesionVisionResult
+            {
+                TestType = testType,
+                LossRatePercent = lossRate,
+                IsQualified = qualified,
+                DefectPixelCount = defectPixels,
+                InspectionPixelCount = inspectionPixels,
+                ParticleCount = particleCount,
+                MaskImagePath = maskPath,
+                AnnotatedImagePath = annotatedPath,
+                Message = method + "脱落率 " + lossRate.ToString("F3", CultureInfo.InvariantCulture) +
+                          "%，判定 " + (qualified ? "合格" : "不合格")
+            };
+        }
+
+        private static Mat LoadColor(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                throw new FileNotFoundException("检测图片不存在。", path);
+            var image = Cv2.ImRead(path, ImreadModes.Color);
+            if (image.Empty())
+            {
+                image.Dispose();
+                throw new InvalidDataException("OpenCV 无法读取图片：" + path);
+            }
+            return image;
+        }
+
+        private static Rect ResolveRegion(OpenCvSharp.Size imageSize, Rectangle? requested)
+        {
+            if (!requested.HasValue)
+            {
+                var marginX = Math.Max(1, imageSize.Width / 20);
+                var marginY = Math.Max(1, imageSize.Height / 20);
+                return new Rect(marginX, marginY, imageSize.Width - marginX * 2, imageSize.Height - marginY * 2);
+            }
+
+            var value = requested.Value;
+            var x = Math.Max(0, value.X);
+            var y = Math.Max(0, value.Y);
+            var right = Math.Min(imageSize.Width, value.Right);
+            var bottom = Math.Min(imageSize.Height, value.Bottom);
+            if (right <= x || bottom <= y)
+                throw new ArgumentOutOfRangeException(nameof(requested), "检测区域不在图片范围内。");
+            return new Rect(x, y, right - x, bottom - y);
+        }
+
+        private static string MakeSafeFileName(string value)
+        {
+            foreach (var invalid in Path.GetInvalidFileNameChars())
+                value = value.Replace(invalid, '_');
+            return value;
+        }
+    }
+}

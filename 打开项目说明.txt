@@ -1,0 +1,12 @@
+﻿请先完整解压本压缩包，再打开工程。
+
+Visual Studio 推荐入口：SiliconSteelAdhesionTester.sln
+也可以直接打开：src\SiliconSteelAdhesionTester\SiliconSteelAdhesionTester.csproj
+
+如果 Visual Studio 提示缺少组件，请打开 Visual Studio Installer，安装：
+1. .NET 桌面开发
+2. .NET Framework 4.8 开发工具/目标包
+
+工程打开后直接执行“生成解决方案”，然后按 F5。默认仿真版无需还原 NuGet 程序包。
+
+交付包已经包含编译完成的仿真程序，也可以直接双击根目录的“启动仿真版.cmd”。

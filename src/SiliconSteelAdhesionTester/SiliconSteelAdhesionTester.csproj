@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildToolsPath)\Microsoft.Common.props" Condition="Exists('$(MSBuildToolsPath)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{A7F2BC3A-34C1-47CE-AAD6-5442583DBE95}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>SiliconSteelAdhesionTester</RootNamespace>
+    <AssemblyName>SiliconSteelAdhesionTester</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <Deterministic>true</Deterministic>
+    <LangVersion>7.3</LangVersion>
+    <SimulationOnly Condition=" '$(SimulationOnly)' == '' ">true</SimulationOnly>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(SimulationOnly)' == 'true' ">
+    <DefineConstants>$(DefineConstants);SIMULATION_ONLY</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 旧式 .NET Framework 项目需要显式编译引用；PackageReference 负责还原和运行时资产。 -->
+    <Reference Include="OpenCvSharp">
+      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\opencvsharp4\4.11.0.20250507\lib\net48\OpenCvSharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\system.buffers\4.6.1\lib\net462\System.Buffers.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\system.memory\4.6.3\lib\net462\System.Memory.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\system.numerics.vectors\4.6.1\lib\net462\System.Numerics.Vectors.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\system.runtime.compilerservices.unsafe\6.1.2\lib\net462\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="System.ValueTuple">
+      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\system.valuetuple\4.6.1\lib\net47\System.ValueTuple.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <PackageReference Include="OpenCvSharp4">
+      <Version>4.11.0.20250507</Version>
+    </PackageReference>
+    <PackageReference Include="OpenCvSharp4.runtime.win">
+      <Version>4.11.0.20250507</Version>
+    </PackageReference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Forms\DebugForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\DebugForm.Designer.cs">
+      <DependentUpon>DebugForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\LoginForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\LoginForm.Designer.cs">
+      <DependentUpon>LoginForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\VisionInspectionForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\VisionInspectionForm.Designer.cs">
+      <DependentUpon>VisionInspectionForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\MainForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\MainForm.Commands.cs">
+      <DependentUpon>MainForm.cs</DependentUpon>
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\MainForm.Designer.cs">
+      <DependentUpon>MainForm.cs</DependentUpon>
+    </Compile>
+    <EmbeddedResource Include="Forms\DebugForm.resx">
+      <DependentUpon>DebugForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\MainForm.resx">
+      <DependentUpon>MainForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <Compile Include="Models\Domain.cs" />
+    <Compile Include="Configuration\AppSettings.cs" />
+    <Compile Include="Services\Plc\IPlcService.cs" />
+    <Compile Include="Services\Scanner\BarcodeScannerModels.cs" />
+    <Compile Include="Services\Scanner\TcpBarcodeScannerService.cs" />
+    <Compile Include="Services\Vision\AdhesionVisionService.cs" />
+    <Compile Include="Services\Vision\IAdhesionVisionService.cs" />
+    <Compile Include="Services\Plc\PlcAddresses.cs" />
+    <Compile Include="Services\Plc\PlcServiceFactory.cs" />
+    <Compile Include="Services\Plc\SimulationPlcService.cs" />
+    <None Include="App.config" />
+    <None Include="app.manifest" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(SimulationOnly)' == 'true' ">
+    <Compile Include="Data\DatabaseService.Simulation.cs" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(SimulationOnly)' != 'true' ">
+    <Compile Include="Data\DatabaseService.cs" />
+    <Compile Include="Services\Plc\S7PlcService.cs" />
+    <Reference Include="S7.Net">
+      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\s7netplus\0.20.0\lib\net462\S7.Net.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="System.Data.SQLite">
+      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\stub.system.data.sqlite.core.netframework\1.0.119\lib\net46\System.Data.SQLite.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <PackageReference Include="S7netplus">
+      <Version>0.20.0</Version>
+    </PackageReference>
+    <PackageReference Include="System.Data.SQLite.Core">
+      <Version>1.0.119</Version>
+    </PackageReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

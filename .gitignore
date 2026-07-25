@@ -1,0 +1,14 @@
+.vs/
+.packages/
+bin/
+obj/
+data/**
+!data/**/
+!data/**/README.md
+images/**
+!images/**/
+!images/**/README.md
+VisionResults/
+tools/xlsx-inspect/
+*.user
+*.suo

@@ -1,0 +1,5 @@
+{
+  "orientedMaxLossRatePercent": 3.0,
+  "nonOrientedMaxLossRatePercent": 3.0,
+  "minimumParticleAreaPixels": 20
+}
