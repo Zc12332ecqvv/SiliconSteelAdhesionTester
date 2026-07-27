@@ -56,7 +56,7 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             _inspections.DataSource = _database.GetInspectionRecords(_keyword.Text.Trim(), 1000);
             Rename(_inspections, "Id", "编号");
-            Rename(_inspections, "Barcode", "二维码/检验号");
+            Rename(_inspections, "QrCodeContent", "二维码内容/检验号");
             Rename(_inspections, "MaterialType", "检测类型");
             Rename(_inspections, "LossRatePercent", "脱落率(%)");
             Rename(_inspections, "ParticleCount", "颗粒数");

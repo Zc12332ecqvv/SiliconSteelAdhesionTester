@@ -14,10 +14,10 @@ namespace SiliconSteelAdhesionTester.Configuration
         public short Slot { get; set; }
         public int PollIntervalMs { get; set; }
         public int CommandPulseMs { get; set; }
-        public int DuplicateBarcodeSeconds { get; set; }
-        public bool BarcodeScannerEnabled { get; set; }
-        public int BarcodeInputTimeoutMs { get; set; }
-        public int BarcodeMinimumLength { get; set; }
+        public int DuplicateQrCodeSeconds { get; set; }
+        public bool QrCodeScannerEnabled { get; set; }
+        public int QrCodeInputTimeoutMs { get; set; }
+        public int QrCodeMinimumLength { get; set; }
         public string OrientedScannerIp { get; set; }
         public int OrientedScannerPort { get; set; }
         public string NonOrientedScannerIp { get; set; }
@@ -53,10 +53,10 @@ namespace SiliconSteelAdhesionTester.Configuration
                 Slot = short.Parse(Read("PlcSlot", "1")),
                 PollIntervalMs = int.Parse(Read("PollIntervalMs", "250")),
                 CommandPulseMs = int.Parse(Read("CommandPulseMs", "300")),
-                DuplicateBarcodeSeconds = int.Parse(Read("DuplicateBarcodeSeconds", "30")),
-                BarcodeScannerEnabled = bool.Parse(Read("BarcodeScannerEnabled", "true")),
-                BarcodeInputTimeoutMs = int.Parse(Read("BarcodeInputTimeoutMs", "120")),
-                BarcodeMinimumLength = int.Parse(Read("BarcodeMinimumLength", "4")),
+                DuplicateQrCodeSeconds = int.Parse(ReadCompatible("DuplicateQrCodeSeconds", "DuplicateBarcodeSeconds", "30")),
+                QrCodeScannerEnabled = bool.Parse(ReadCompatible("QrCodeScannerEnabled", "BarcodeScannerEnabled", "true")),
+                QrCodeInputTimeoutMs = int.Parse(ReadCompatible("QrCodeInputTimeoutMs", "BarcodeInputTimeoutMs", "120")),
+                QrCodeMinimumLength = int.Parse(ReadCompatible("QrCodeMinimumLength", "BarcodeMinimumLength", "4")),
                 OrientedScannerIp = Read("OrientedScannerIp", "192.168.3.11"),
                 OrientedScannerPort = int.Parse(Read("OrientedScannerPort", "9004")),
                 NonOrientedScannerIp = Read("NonOrientedScannerIp", "192.168.3.12"),
@@ -96,10 +96,10 @@ namespace SiliconSteelAdhesionTester.Configuration
                 Write(writer, "PlcSlot", Slot);
                 Write(writer, "PollIntervalMs", PollIntervalMs);
                 Write(writer, "CommandPulseMs", CommandPulseMs);
-                Write(writer, "BarcodeScannerEnabled", BarcodeScannerEnabled);
-                Write(writer, "BarcodeInputTimeoutMs", BarcodeInputTimeoutMs);
-                Write(writer, "BarcodeMinimumLength", BarcodeMinimumLength);
-                Write(writer, "DuplicateBarcodeSeconds", DuplicateBarcodeSeconds);
+                Write(writer, "QrCodeScannerEnabled", QrCodeScannerEnabled);
+                Write(writer, "QrCodeInputTimeoutMs", QrCodeInputTimeoutMs);
+                Write(writer, "QrCodeMinimumLength", QrCodeMinimumLength);
+                Write(writer, "DuplicateQrCodeSeconds", DuplicateQrCodeSeconds);
                 Write(writer, "OrientedScannerIp", OrientedScannerIp);
                 Write(writer, "OrientedScannerPort", OrientedScannerPort);
                 Write(writer, "NonOrientedScannerIp", NonOrientedScannerIp);
@@ -141,10 +141,10 @@ namespace SiliconSteelAdhesionTester.Configuration
             Slot = (short)IntValue(root, "PlcSlot", Slot);
             PollIntervalMs = IntValue(root, "PollIntervalMs", PollIntervalMs);
             CommandPulseMs = IntValue(root, "CommandPulseMs", CommandPulseMs);
-            BarcodeScannerEnabled = BoolValue(root, "BarcodeScannerEnabled", BarcodeScannerEnabled);
-            BarcodeInputTimeoutMs = IntValue(root, "BarcodeInputTimeoutMs", BarcodeInputTimeoutMs);
-            BarcodeMinimumLength = IntValue(root, "BarcodeMinimumLength", BarcodeMinimumLength);
-            DuplicateBarcodeSeconds = IntValue(root, "DuplicateBarcodeSeconds", DuplicateBarcodeSeconds);
+            QrCodeScannerEnabled = BoolValue(root, "QrCodeScannerEnabled", BoolValue(root, "BarcodeScannerEnabled", QrCodeScannerEnabled));
+            QrCodeInputTimeoutMs = IntValue(root, "QrCodeInputTimeoutMs", IntValue(root, "BarcodeInputTimeoutMs", QrCodeInputTimeoutMs));
+            QrCodeMinimumLength = IntValue(root, "QrCodeMinimumLength", IntValue(root, "BarcodeMinimumLength", QrCodeMinimumLength));
+            DuplicateQrCodeSeconds = IntValue(root, "DuplicateQrCodeSeconds", IntValue(root, "DuplicateBarcodeSeconds", DuplicateQrCodeSeconds));
             OrientedScannerIp = Value(root, "OrientedScannerIp", OrientedScannerIp);
             OrientedScannerPort = IntValue(root, "OrientedScannerPort", OrientedScannerPort);
             NonOrientedScannerIp = Value(root, "NonOrientedScannerIp", NonOrientedScannerIp);
@@ -201,6 +201,11 @@ namespace SiliconSteelAdhesionTester.Configuration
         private static string Read(string key, string fallback)
         {
             return ConfigurationManager.AppSettings[key] ?? fallback;
+        }
+
+        private static string ReadCompatible(string key, string legacyKey, string fallback)
+        {
+            return ConfigurationManager.AppSettings[key] ?? ConfigurationManager.AppSettings[legacyKey] ?? fallback;
         }
     }
 }

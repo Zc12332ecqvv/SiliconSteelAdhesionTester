@@ -16,7 +16,7 @@
         private System.Windows.Forms.Label lblPermission;
         private System.Windows.Forms.Label lblHome;
         private System.Windows.Forms.Label lblMode;
-        private System.Windows.Forms.Label lblBarcode;
+        private System.Windows.Forms.Label lblQrCodeContent;
         private System.Windows.Forms.Label lblTotalCount;
         private System.Windows.Forms.Label lblShiftCount;
         private System.Windows.Forms.Label lblCurrentTask;
@@ -99,7 +99,7 @@
             this.lblPermission = new System.Windows.Forms.Label();
             this.lblHome = new System.Windows.Forms.Label();
             this.lblMode = new System.Windows.Forms.Label();
-            this.lblBarcode = new System.Windows.Forms.Label();
+            this.lblQrCodeContent = new System.Windows.Forms.Label();
             this.lblTotalCount = new System.Windows.Forms.Label();
             this.lblShiftCount = new System.Windows.Forms.Label();
             this.lblCurrentTask = new System.Windows.Forms.Label();
@@ -278,12 +278,12 @@
             this.lblCurrentTask.ForeColor = System.Drawing.Color.DimGray;
             this.lblCurrentTask.Location = new System.Drawing.Point(22, 13);
             this.lblCurrentTask.Size = new System.Drawing.Size(220, 22);
-            this.lblCurrentTask.Text = "当前检验号 · 等待扫码/总控任务";
-            this.lblBarcode.Font = new System.Drawing.Font("Microsoft YaHei UI", 15F, System.Drawing.FontStyle.Bold);
-            this.lblBarcode.ForeColor = System.Drawing.Color.FromArgb(30, 83, 140);
-            this.lblBarcode.Location = new System.Drawing.Point(20, 40);
-            this.lblBarcode.Size = new System.Drawing.Size(270, 40);
-            this.lblBarcode.Text = "-";
+            this.lblCurrentTask.Text = "当前检验号 · 等待二维码/总控任务";
+            this.lblQrCodeContent.Font = new System.Drawing.Font("Microsoft YaHei UI", 15F, System.Drawing.FontStyle.Bold);
+            this.lblQrCodeContent.ForeColor = System.Drawing.Color.FromArgb(30, 83, 140);
+            this.lblQrCodeContent.Location = new System.Drawing.Point(20, 40);
+            this.lblQrCodeContent.Size = new System.Drawing.Size(270, 40);
+            this.lblQrCodeContent.Text = "-";
             this.lblMaterialType.ForeColor = System.Drawing.Color.DimGray;
             this.lblMaterialType.Location = new System.Drawing.Point(330, 13);
             this.lblMaterialType.Size = new System.Drawing.Size(200, 22);
@@ -297,7 +297,7 @@
             this.lblShiftCount.Size = new System.Drawing.Size(150, 40);
             this.lblShiftCount.Text = "0 PCS";
             this.pnlOverview.Controls.Add(this.lblCurrentTask);
-            this.pnlOverview.Controls.Add(this.lblBarcode);
+            this.pnlOverview.Controls.Add(this.lblQrCodeContent);
             this.pnlOverview.Controls.Add(this.lblMaterialType);
             this.pnlOverview.Controls.Add(this.lblTotalCount);
             this.pnlOverview.Controls.Add(this.lblShiftCount);
@@ -321,7 +321,7 @@
             this.lblFlow6.Size = new System.Drawing.Size(149, 42);
             this.lblFlow7.Size = new System.Drawing.Size(149, 42);
             this.lblFlow8.Size = new System.Drawing.Size(149, 42);
-            this.lblFlow1.Text = "1 扫码取样";
+            this.lblFlow1.Text = "1 二维码取样";
             this.lblFlow2.Text = "2 压弯前拍照";
             this.lblFlow3.Text = "3 固定位置压弯";
             this.lblFlow4.Text = "4 压弯后拍照";

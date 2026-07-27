@@ -50,9 +50,9 @@ namespace SiliconSteelAdhesionTester.Data
             Append("OPERATION", userName, action, string.Empty, detail);
         }
 
-        public void SaveScanEvent(string barcode, string materialType, string station, bool accepted, string message, string userName)
+        public void SaveQrCodeScanEvent(string qrCodeContent, string materialType, string station, bool accepted, string message, string userName)
         {
-            Append("SCAN", userName, accepted ? "OK" : "NG", station, materialType + " " + barcode + " " + message);
+            Append("QR", userName, accepted ? "OK" : "NG", station, materialType + " " + qrCodeContent + " " + message);
         }
 
         public void SaveManualTask(string taskNo, int? orientedCount, int? nonOrientedCount, string userName)
@@ -60,9 +60,9 @@ namespace SiliconSteelAdhesionTester.Data
             Append("TASK", userName, taskNo, "Manual", "取向=" + orientedCount + " 无取向=" + nonOrientedCount);
         }
 
-        public long SaveVisionResult(string barcode, string sourceImagePath, AdhesionVisionResult result, string userName)
+        public long SaveVisionResult(string qrCodeContent, string sourceImagePath, AdhesionVisionResult result, string userName)
         {
-            Append("VISION", userName, result.IsQualified ? "OK" : "NG", barcode,
+            Append("VISION", userName, result.IsQualified ? "OK" : "NG", qrCodeContent,
                 result.TestType + " 脱落率=" + result.LossRatePercent.ToString("F3") + "% 颗粒=" + result.ParticleCount + " 图片=" + result.AnnotatedImagePath);
             return DateTime.Now.Ticks;
         }

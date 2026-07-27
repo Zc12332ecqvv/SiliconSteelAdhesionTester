@@ -43,7 +43,7 @@ namespace SiliconSteelAdhesionTester.Models
         public bool EmergencyStop { get; set; }
         public DateTime Timestamp { get; set; }
         public StationSnapshot[] Stations { get; set; }
-        public string Barcode { get; set; }
+        public string QrCodeContent { get; set; }
         public int TotalCount { get; set; }
         public int ShiftCount { get; set; }
         public int FlowStepIndex { get; set; }

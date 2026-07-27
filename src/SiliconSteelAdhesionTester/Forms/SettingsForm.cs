@@ -17,7 +17,7 @@ namespace SiliconSteelAdhesionTester.Forms
         private readonly NumericUpDown numSlot = NewNumber(0, 255);
         private readonly NumericUpDown numPoll = NewNumber(50, 60000);
         private readonly NumericUpDown numPulse = NewNumber(50, 10000);
-        private readonly CheckBox chkScannerEnabled = new CheckBox { Text = "启用SR-1000网络扫码", AutoSize = true };
+        private readonly CheckBox chkScannerEnabled = new CheckBox { Text = "启用SR-1000二维码读取", AutoSize = true };
         private readonly TextBox txtOrientedIp = NewText();
         private readonly NumericUpDown numOrientedPort = NewNumber(1, 65535);
         private readonly TextBox txtNonOrientedIp = NewText();
@@ -110,13 +110,13 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private TabPage BuildScannerPage()
         {
-            TabPage page = NewPage("SR-1000扫码枪");
+            TabPage page = NewPage("SR-1000二维码读取器");
             TableLayoutPanel table = NewTable();
-            AddRow(table, "扫码功能", chkScannerEnabled, "取向与无取向工位可分别配置");
-            AddRow(table, "取向扫码枪IP", txtOrientedIp, "S2取向工位");
-            AddRow(table, "取向扫码枪端口", numOrientedPort, "SR-1000 TCP端口");
-            AddRow(table, "无取向扫码枪IP", txtNonOrientedIp, "S3无取向工位");
-            AddRow(table, "无取向扫码枪端口", numNonOrientedPort, "SR-1000 TCP端口");
+            AddRow(table, "二维码读取功能", chkScannerEnabled, "取向与无取向工位可分别配置");
+            AddRow(table, "取向读取器IP", txtOrientedIp, "S2取向工位");
+            AddRow(table, "取向读取器端口", numOrientedPort, "SR-1000 TCP端口");
+            AddRow(table, "无取向读取器IP", txtNonOrientedIp, "S3无取向工位");
+            AddRow(table, "无取向读取器端口", numNonOrientedPort, "SR-1000 TCP端口");
             AddRow(table, "连接超时(ms)", numConnectTimeout, "断线后由通讯服务自动重连");
             AddRow(table, "收码超时(ms)", numInputTimeout, "触发后等待二维码的最长时间");
             AddRow(table, "最小码长", numMinLength, "少于该长度判定为无效码");
@@ -172,15 +172,15 @@ namespace SiliconSteelAdhesionTester.Forms
             numSlot.Value = Clamp(numSlot, _settings.Slot);
             numPoll.Value = Clamp(numPoll, _settings.PollIntervalMs);
             numPulse.Value = Clamp(numPulse, _settings.CommandPulseMs);
-            chkScannerEnabled.Checked = _settings.BarcodeScannerEnabled;
+            chkScannerEnabled.Checked = _settings.QrCodeScannerEnabled;
             txtOrientedIp.Text = _settings.OrientedScannerIp;
             numOrientedPort.Value = Clamp(numOrientedPort, _settings.OrientedScannerPort);
             txtNonOrientedIp.Text = _settings.NonOrientedScannerIp;
             numNonOrientedPort.Value = Clamp(numNonOrientedPort, _settings.NonOrientedScannerPort);
             numConnectTimeout.Value = Clamp(numConnectTimeout, _settings.ScannerConnectTimeoutMs);
             numInputTimeout.Value = Clamp(numInputTimeout, _settings.ScannerReadTimeoutMs);
-            numMinLength.Value = Clamp(numMinLength, _settings.BarcodeMinimumLength);
-            numDuplicateSeconds.Value = Clamp(numDuplicateSeconds, _settings.DuplicateBarcodeSeconds);
+            numMinLength.Value = Clamp(numMinLength, _settings.QrCodeMinimumLength);
+            numDuplicateSeconds.Value = Clamp(numDuplicateSeconds, _settings.DuplicateQrCodeSeconds);
             txtTriggerCommand.Text = _settings.ScannerTriggerCommand;
             txtStopCommand.Text = _settings.ScannerStopCommand;
             cboTerminator.SelectedItem = _settings.ScannerTerminator;
@@ -200,8 +200,8 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             string error;
             if (!ValidateIp(txtPlcIp.Text, "PLC IP", out error) ||
-                !ValidateIp(txtOrientedIp.Text, "取向扫码枪IP", out error) ||
-                !ValidateIp(txtNonOrientedIp.Text, "无取向扫码枪IP", out error))
+                !ValidateIp(txtOrientedIp.Text, "取向二维码读取器IP", out error) ||
+                !ValidateIp(txtNonOrientedIp.Text, "无取向二维码读取器IP", out error))
             {
                 MessageBox.Show(this, error, "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -227,15 +227,15 @@ namespace SiliconSteelAdhesionTester.Forms
             _settings.Slot = (short)numSlot.Value;
             _settings.PollIntervalMs = (int)numPoll.Value;
             _settings.CommandPulseMs = (int)numPulse.Value;
-            _settings.BarcodeScannerEnabled = chkScannerEnabled.Checked;
+            _settings.QrCodeScannerEnabled = chkScannerEnabled.Checked;
             _settings.OrientedScannerIp = txtOrientedIp.Text.Trim();
             _settings.OrientedScannerPort = (int)numOrientedPort.Value;
             _settings.NonOrientedScannerIp = txtNonOrientedIp.Text.Trim();
             _settings.NonOrientedScannerPort = (int)numNonOrientedPort.Value;
             _settings.ScannerConnectTimeoutMs = (int)numConnectTimeout.Value;
             _settings.ScannerReadTimeoutMs = (int)numInputTimeout.Value;
-            _settings.BarcodeMinimumLength = (int)numMinLength.Value;
-            _settings.DuplicateBarcodeSeconds = (int)numDuplicateSeconds.Value;
+            _settings.QrCodeMinimumLength = (int)numMinLength.Value;
+            _settings.DuplicateQrCodeSeconds = (int)numDuplicateSeconds.Value;
             _settings.ScannerTriggerCommand = txtTriggerCommand.Text.Trim();
             _settings.ScannerStopCommand = txtStopCommand.Text.Trim();
             _settings.ScannerTerminator = Convert.ToString(cboTerminator.SelectedItem);
@@ -252,7 +252,7 @@ namespace SiliconSteelAdhesionTester.Forms
             try
             {
                 _settings.SaveOverrides();
-                MessageBox.Show(this, "设置已保存。请重启程序，使PLC和扫码通讯参数完整生效。",
+                MessageBox.Show(this, "设置已保存。请重启程序，使PLC和二维码读取通讯参数完整生效。",
                     "保存成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 DialogResult = DialogResult.OK;
                 Close();

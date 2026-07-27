@@ -15,8 +15,8 @@ namespace SiliconSteelAdhesionTester.Services.Plc
         private readonly bool[] _stationRunning = { false, false, false, false };
         private int _processTick;
         private int _completedCount;
-        private int _barcodeSequence = 1;
-        private string _currentBarcode;
+        private int _qrCodeSequence = 1;
+        private string _currentQrCode;
         private bool _lineRunning;
         private bool _linePaused;
         private int _flowStep;
@@ -55,8 +55,8 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     {
                         _flowStep = 0;
                         _completedCount++;
-                        _barcodeSequence++;
-                        _currentBarcode = "SIM-1-" + _barcodeSequence.ToString("D6");
+                        _qrCodeSequence++;
+                        _currentQrCode = "SIM-QR-" + _qrCodeSequence.ToString("D6");
                     }
                 }
 
@@ -80,7 +80,7 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     Automatic = !GetBool(PlcAddresses.AutoMode),
                     Timestamp = DateTime.Now,
                     Stations = stations,
-                    Barcode = _currentBarcode,
+                    QrCodeContent = _currentQrCode,
                     TotalCount = _completedCount,
                     ShiftCount = _completedCount,
                     FlowStepIndex = _flowStep,
@@ -106,8 +106,8 @@ namespace SiliconSteelAdhesionTester.Services.Plc
             bool isOn = value is bool && (bool)value;
             if (address == PlcAddresses.LineStart && isOn)
             {
-                if (string.IsNullOrEmpty(_currentBarcode))
-                    _currentBarcode = "SIM-1-" + _barcodeSequence.ToString("D6");
+                if (string.IsNullOrEmpty(_currentQrCode))
+                    _currentQrCode = "SIM-QR-" + _qrCodeSequence.ToString("D6");
                 _lineRunning = true;
                 _linePaused = false;
                 for (int i = 0; i < 4; i++) _stationRunning[i] = true;
@@ -147,8 +147,8 @@ namespace SiliconSteelAdhesionTester.Services.Plc
             {
                 "AGV正在配送物料到S1上料位",
                 "S1传感器检测来料到位",
-                "扫码设备读取物料条码",
-                "上位机执行白名单、品类与重复扫码校验",
+                "SR-1000读取物料二维码",
+                "上位机执行二维码、品类与重复读取校验",
                 "工业相机采集物料图像",
                 "视觉系统返回有取向、无取向或不良品分类",
                 "PLC按检测结果执行对应工位流程",

@@ -38,22 +38,21 @@ PRAGMA synchronous=FULL;
 PRAGMA foreign_keys=ON;
 PRAGMA busy_timeout=5000;
 CREATE TABLE IF NOT EXISTS Users(Id INTEGER PRIMARY KEY AUTOINCREMENT, UserName TEXT NOT NULL UNIQUE, DisplayName TEXT NOT NULL, PasswordHash TEXT NOT NULL, Role INTEGER NOT NULL, Enabled INTEGER NOT NULL DEFAULT 1, CreatedAt TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS BarcodeWhitelist(Id INTEGER PRIMARY KEY AUTOINCREMENT, Barcode TEXT NOT NULL UNIQUE, MaterialType INTEGER NOT NULL, Enabled INTEGER NOT NULL DEFAULT 1, Remark TEXT, CreatedAt TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS ProductionRecords(Id INTEGER PRIMARY KEY AUTOINCREMENT, Barcode TEXT NOT NULL, MaterialType INTEGER, VisionResult INTEGER, IsQualified INTEGER NOT NULL, ImagePath TEXT, ProcessData TEXT, OperatorName TEXT, CreatedAt TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS QrCodeWhitelist(Id INTEGER PRIMARY KEY AUTOINCREMENT, QrCodeContent TEXT NOT NULL UNIQUE, MaterialType INTEGER NOT NULL, Enabled INTEGER NOT NULL DEFAULT 1, Remark TEXT, CreatedAt TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ProductionRecords(Id INTEGER PRIMARY KEY AUTOINCREMENT, QrCodeContent TEXT, MaterialType INTEGER, VisionResult INTEGER, IsQualified INTEGER NOT NULL, ImagePath TEXT, ProcessData TEXT, OperatorName TEXT, CreatedAt TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS IX_ProductionRecords_CreatedAt ON ProductionRecords(CreatedAt);
 CREATE TABLE IF NOT EXISTS FaultLogs(Id INTEGER PRIMARY KEY AUTOINCREMENT, FaultCode TEXT, Node TEXT, Message TEXT NOT NULL, OperatorName TEXT, IsCleared INTEGER NOT NULL DEFAULT 0, CreatedAt TEXT NOT NULL, ClearedAt TEXT);
 CREATE TABLE IF NOT EXISTS OperationLogs(Id INTEGER PRIMARY KEY AUTOINCREMENT, UserName TEXT, Action TEXT NOT NULL, Detail TEXT, CreatedAt TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS InspectionTasks(Id INTEGER PRIMARY KEY AUTOINCREMENT, TaskNo TEXT NOT NULL UNIQUE, Source TEXT NOT NULL, Status TEXT NOT NULL, OrientedCount INTEGER, NonOrientedCount INTEGER, OperatorName TEXT, CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS ScanEvents(Id INTEGER PRIMARY KEY AUTOINCREMENT, Barcode TEXT, MaterialType TEXT, Station TEXT, IsAccepted INTEGER NOT NULL, Message TEXT, OperatorName TEXT, CreatedAt TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS IX_ScanEvents_Barcode ON ScanEvents(Barcode);
-CREATE TABLE IF NOT EXISTS VisionResults(Id INTEGER PRIMARY KEY AUTOINCREMENT, Barcode TEXT NOT NULL, TestType TEXT NOT NULL, LossRatePercent REAL NOT NULL, ParticleCount INTEGER NOT NULL, DefectPixelCount INTEGER NOT NULL, InspectionPixelCount INTEGER NOT NULL, IsQualified INTEGER NOT NULL, SourceImagePath TEXT, MaskImagePath TEXT, AnnotatedImagePath TEXT, OperatorName TEXT, CreatedAt TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS IX_VisionResults_Barcode ON VisionResults(Barcode);
+CREATE TABLE IF NOT EXISTS ScanEvents(Id INTEGER PRIMARY KEY AUTOINCREMENT, QrCodeContent TEXT, MaterialType TEXT, Station TEXT, IsAccepted INTEGER NOT NULL, Message TEXT, OperatorName TEXT, CreatedAt TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS VisionResults(Id INTEGER PRIMARY KEY AUTOINCREMENT, QrCodeContent TEXT, TestType TEXT NOT NULL, LossRatePercent REAL NOT NULL, ParticleCount INTEGER NOT NULL, DefectPixelCount INTEGER NOT NULL, InspectionPixelCount INTEGER NOT NULL, IsQualified INTEGER NOT NULL, SourceImagePath TEXT, MaskImagePath TEXT, AnnotatedImagePath TEXT, OperatorName TEXT, CreatedAt TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS IX_VisionResults_CreatedAt ON VisionResults(CreatedAt);
 CREATE TABLE IF NOT EXISTS SyncOutbox(Id INTEGER PRIMARY KEY AUTOINCREMENT, EntityType TEXT NOT NULL, EntityId INTEGER NOT NULL, Payload TEXT NOT NULL, Status TEXT NOT NULL DEFAULT 'Pending', RetryCount INTEGER NOT NULL DEFAULT 0, NextAttemptAt TEXT, LastError TEXT, CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS IX_SyncOutbox_Status ON SyncOutbox(Status,NextAttemptAt);
 PRAGMA user_version=1;";
                 command.ExecuteNonQuery();
             }
+            EnsureQrCodeSchema();
             CreateDailyBackup();
             EnsureUser("operator", "操作员", "123456", UserRole.Operator);
             EnsureUser("engineer", "电气调试员", "123456", UserRole.Engineer);
@@ -88,10 +87,10 @@ PRAGMA user_version=1;";
             Execute("INSERT INTO OperationLogs(UserName,Action,Detail,CreatedAt) VALUES(@a,@b,@c,@d)", userName, action, detail, DateTime.Now.ToString("s"));
         }
 
-        public void SaveScanEvent(string barcode, string materialType, string station, bool accepted, string message, string userName)
+        public void SaveQrCodeScanEvent(string qrCodeContent, string materialType, string station, bool accepted, string message, string userName)
         {
-            Execute("INSERT INTO ScanEvents(Barcode,MaterialType,Station,IsAccepted,Message,OperatorName,CreatedAt) VALUES(@a,@b,@c,@d,@e,@f,@g)",
-                barcode, materialType, station, accepted ? 1 : 0, message, userName, DateTime.Now.ToString("s"));
+            Execute("INSERT INTO ScanEvents(QrCodeContent,MaterialType,Station,IsAccepted,Message,OperatorName,CreatedAt) VALUES(@a,@b,@c,@d,@e,@f,@g)",
+                qrCodeContent, materialType, station, accepted ? 1 : 0, message, userName, DateTime.Now.ToString("s"));
         }
 
         public void SaveManualTask(string taskNo, int? orientedCount, int? nonOrientedCount, string userName)
@@ -101,7 +100,7 @@ VALUES(@a,'Manual','Pending',@b,@c,@d,COALESCE((SELECT CreatedAt FROM Inspection
                 taskNo, orientedCount, nonOrientedCount, userName, DateTime.Now.ToString("s"));
         }
 
-        public long SaveVisionResult(string barcode, string sourceImagePath, AdhesionVisionResult result, string userName)
+        public long SaveVisionResult(string qrCodeContent, string sourceImagePath, AdhesionVisionResult result, string userName)
         {
             if (result == null) throw new ArgumentNullException(nameof(result));
             using (SQLiteConnection connection = Open())
@@ -111,10 +110,10 @@ VALUES(@a,'Manual','Pending',@b,@c,@d,COALESCE((SELECT CreatedAt FROM Inspection
                 using (SQLiteCommand command = connection.CreateCommand())
                 {
                     command.Transaction = transaction;
-                    command.CommandText = @"INSERT INTO VisionResults(Barcode,TestType,LossRatePercent,ParticleCount,DefectPixelCount,InspectionPixelCount,IsQualified,SourceImagePath,MaskImagePath,AnnotatedImagePath,OperatorName,CreatedAt)
-VALUES(@barcode,@type,@loss,@particles,@defects,@pixels,@qualified,@source,@mask,@annotated,@user,@created);
+                    command.CommandText = @"INSERT INTO VisionResults(QrCodeContent,TestType,LossRatePercent,ParticleCount,DefectPixelCount,InspectionPixelCount,IsQualified,SourceImagePath,MaskImagePath,AnnotatedImagePath,OperatorName,CreatedAt)
+VALUES(@qrCode,@type,@loss,@particles,@defects,@pixels,@qualified,@source,@mask,@annotated,@user,@created);
 SELECT last_insert_rowid();";
-                    command.Parameters.AddWithValue("@barcode", barcode);
+                    command.Parameters.AddWithValue("@qrCode", qrCodeContent);
                     command.Parameters.AddWithValue("@type", result.TestType.ToString());
                     command.Parameters.AddWithValue("@loss", result.LossRatePercent);
                     command.Parameters.AddWithValue("@particles", result.ParticleCount);
@@ -134,7 +133,7 @@ SELECT last_insert_rowid();";
                     outbox.CommandText = @"INSERT INTO SyncOutbox(EntityType,EntityId,Payload,Status,CreatedAt,UpdatedAt)
 VALUES('VisionResult',@id,@payload,'Pending',@now,@now)";
                     outbox.Parameters.AddWithValue("@id", id);
-                    outbox.Parameters.AddWithValue("@payload", "{\"visionResultId\":" + id + ",\"barcode\":\"" + JsonEscape(barcode) + "\"}");
+                    outbox.Parameters.AddWithValue("@payload", "{\"visionResultId\":" + id + ",\"qrCodeContent\":\"" + JsonEscape(qrCodeContent) + "\"}");
                     outbox.Parameters.AddWithValue("@now", DateTime.Now.ToString("s"));
                     outbox.ExecuteNonQuery();
                 }
@@ -149,8 +148,8 @@ VALUES('VisionResult',@id,@payload,'Pending',@now,@now)";
             using (SQLiteConnection connection = Open())
             using (SQLiteCommand command = connection.CreateCommand())
             {
-                command.CommandText = @"SELECT Id,Barcode,TestType,LossRatePercent,ParticleCount,IsQualified,AnnotatedImagePath,OperatorName,CreatedAt
-FROM VisionResults WHERE (@keyword='' OR Barcode LIKE @pattern) ORDER BY Id DESC LIMIT @limit";
+                command.CommandText = @"SELECT Id,QrCodeContent,TestType,LossRatePercent,ParticleCount,IsQualified,AnnotatedImagePath,OperatorName,CreatedAt
+FROM VisionResults WHERE (@keyword='' OR QrCodeContent LIKE @pattern) ORDER BY Id DESC LIMIT @limit";
                 command.Parameters.AddWithValue("@keyword", keyword ?? string.Empty);
                 command.Parameters.AddWithValue("@pattern", "%" + (keyword ?? string.Empty) + "%");
                 command.Parameters.AddWithValue("@limit", Math.Max(1, Math.Min(5000, limit)));
@@ -158,7 +157,7 @@ FROM VisionResults WHERE (@keyword='' OR Barcode LIKE @pattern) ORDER BY Id DESC
                     while (reader.Read())
                         records.Add(new InspectionRecord
                         {
-                            Id = reader.GetInt64(0), Barcode = reader.GetString(1), MaterialType = reader.GetString(2),
+                            Id = reader.GetInt64(0), QrCodeContent = reader.IsDBNull(1) ? null : reader.GetString(1), MaterialType = reader.GetString(2),
                             LossRatePercent = reader.GetDouble(3), ParticleCount = reader.GetInt32(4),
                             IsQualified = reader.GetInt32(5) == 1, ImagePath = reader.IsDBNull(6) ? null : reader.GetString(6),
                             OperatorName = reader.IsDBNull(7) ? null : reader.GetString(7), CreatedAt = DateTime.Parse(reader.GetString(8))
@@ -196,6 +195,57 @@ ORDER BY CreatedAt DESC LIMIT @limit";
         }
 
         private SQLiteConnection Open() { SQLiteConnection c = new SQLiteConnection(_connectionString); c.Open(); return c; }
+
+        private void EnsureQrCodeSchema()
+        {
+            using (SQLiteConnection connection = Open())
+            {
+                EnsureColumn(connection, "ProductionRecords", "QrCodeContent", "TEXT");
+                EnsureColumn(connection, "ScanEvents", "QrCodeContent", "TEXT");
+                EnsureColumn(connection, "VisionResults", "QrCodeContent", "TEXT");
+                CopyLegacyQrCodeValues(connection, "ProductionRecords");
+                CopyLegacyQrCodeValues(connection, "ScanEvents");
+                CopyLegacyQrCodeValues(connection, "VisionResults");
+                using (SQLiteCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = @"CREATE INDEX IF NOT EXISTS IX_ScanEvents_QrCodeContent ON ScanEvents(QrCodeContent);
+CREATE INDEX IF NOT EXISTS IX_VisionResults_QrCodeContent ON VisionResults(QrCodeContent);";
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private static void EnsureColumn(SQLiteConnection connection, string table, string column, string type)
+        {
+            if (ColumnExists(connection, table, column)) return;
+            using (SQLiteCommand command = connection.CreateCommand())
+            {
+                command.CommandText = "ALTER TABLE [" + table + "] ADD COLUMN [" + column + "] " + type;
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private static void CopyLegacyQrCodeValues(SQLiteConnection connection, string table)
+        {
+            if (!ColumnExists(connection, table, "Barcode") || !ColumnExists(connection, table, "QrCodeContent")) return;
+            using (SQLiteCommand command = connection.CreateCommand())
+            {
+                command.CommandText = "UPDATE [" + table + "] SET QrCodeContent=Barcode WHERE (QrCodeContent IS NULL OR QrCodeContent='') AND Barcode IS NOT NULL";
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private static bool ColumnExists(SQLiteConnection connection, string table, string column)
+        {
+            using (SQLiteCommand command = connection.CreateCommand())
+            {
+                command.CommandText = "PRAGMA table_info([" + table + "])";
+                using (SQLiteDataReader reader = command.ExecuteReader())
+                    while (reader.Read())
+                        if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
 
         private void CreateDailyBackup()
         {

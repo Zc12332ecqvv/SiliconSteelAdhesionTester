@@ -118,7 +118,7 @@ namespace SiliconSteelAdhesionTester.Forms
                     dgvTasks.Rows.Clear();
                 dgvTasks.Rows.Insert(0, taskId, oriented + " / " + nonOriented, "手动任务待执行");
                 lblCurrentTask.Text = "当前任务 · 手动创建，等待启动";
-                lblBarcode.Text = taskId;
+                lblQrCodeContent.Text = taskId;
                 SetPreviewSample(taskId);
                 lblMaterialType.Text = oriented + "，" + nonOriented;
                 AppendRuntimeLog("[MANUAL] 已创建手动任务：" + taskId);
@@ -131,7 +131,7 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private void OpenVisionWindow()
         {
-            new VisionInspectionForm(new AdhesionVisionService(_settings), _database, _user, _lastScannedBarcode).Show(this);
+            new VisionInspectionForm(new AdhesionVisionService(_settings), _database, _user, _lastScannedQrCode).Show(this);
         }
 
         private void OpenSettingsWindow()

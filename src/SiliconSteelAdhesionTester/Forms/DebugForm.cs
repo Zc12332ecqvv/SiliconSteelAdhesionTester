@@ -47,7 +47,7 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             MinimumSize = new Size(900, 650);
             AutoScroll = true;
-            string[] steps = { "AGV送料", "S1来料", "扫码", "条码校验", "相机拍照", "视觉分类", "工位加工", "等待来料" };
+            string[] steps = { "AGV送料", "S1来料", "读取二维码", "二维码校验", "相机拍照", "视觉分类", "工位加工", "等待来料" };
             for (int i = 0; i < steps.Length; i++)
             {
                 Label label = new Label

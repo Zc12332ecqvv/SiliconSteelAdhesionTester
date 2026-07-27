@@ -42,27 +42,27 @@
   <ItemGroup>
     <!-- 旧式 .NET Framework 项目需要显式编译引用；PackageReference 负责还原和运行时资产。 -->
     <Reference Include="OpenCvSharp">
-      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\opencvsharp4\4.11.0.20250507\lib\net48\OpenCvSharp.dll</HintPath>
+      <HintPath>lib\OpenCvSharp.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Buffers">
-      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\system.buffers\4.6.1\lib\net462\System.Buffers.dll</HintPath>
+      <HintPath>lib\System.Buffers.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Memory">
-      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\system.memory\4.6.3\lib\net462\System.Memory.dll</HintPath>
+      <HintPath>lib\System.Memory.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Numerics.Vectors">
-      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\system.numerics.vectors\4.6.1\lib\net462\System.Numerics.Vectors.dll</HintPath>
+      <HintPath>lib\System.Numerics.Vectors.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Runtime.CompilerServices.Unsafe">
-      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\system.runtime.compilerservices.unsafe\6.1.2\lib\net462\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+      <HintPath>lib\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.ValueTuple">
-      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\system.valuetuple\4.6.1\lib\net47\System.ValueTuple.dll</HintPath>
+      <HintPath>lib\System.ValueTuple.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <PackageReference Include="OpenCvSharp4">
@@ -132,7 +132,7 @@
     <Compile Include="Models\Records.cs" />
     <Compile Include="Configuration\AppSettings.cs" />
     <Compile Include="Services\Plc\IPlcService.cs" />
-    <Compile Include="Services\Scanner\KeyboardBarcodeScanner.cs" />
+    <Compile Include="Services\Scanner\KeyboardQrCodeScanner.cs" />
     <Compile Include="Services\Vision\AdhesionVisionService.cs" />
     <Compile Include="Services\Vision\IAdhesionVisionService.cs" />
     <Compile Include="Services\Plc\PlcAddresses.cs" />
@@ -148,11 +148,11 @@
     <Compile Include="Data\DatabaseService.cs" />
     <Compile Include="Services\Plc\S7PlcService.cs" />
     <Reference Include="S7.Net">
-      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\s7netplus\0.20.0\lib\net462\S7.Net.dll</HintPath>
+      <HintPath>lib\S7.Net.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Data.SQLite">
-      <HintPath>$(MSBuildProjectDirectory)\..\..\.packages\stub.system.data.sqlite.core.netframework\1.0.119\lib\net46\System.Data.SQLite.dll</HintPath>
+      <HintPath>lib\System.Data.SQLite.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <PackageReference Include="S7netplus">

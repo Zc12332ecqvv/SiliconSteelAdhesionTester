@@ -5,10 +5,10 @@ using System.Text;
 namespace SiliconSteelAdhesionTester.Services.Scanner
 {
     /// <summary>
-    /// 接收配置为 USB-HID 键盘模式、并以回车结尾的工业扫码枪输入。
-    /// 字符间隔超时后自动丢弃残留，避免把人工键盘输入拼成条码。
+    /// 接收配置为 USB-HID 键盘模式、并以回车结尾的工业二维码读取器输入。
+    /// 字符间隔超时后自动丢弃残留，避免把人工键盘输入拼成二维码内容。
     /// </summary>
-    public sealed class KeyboardBarcodeScanner
+    public sealed class KeyboardQrCodeScanner
     {
         private readonly StringBuilder _buffer = new StringBuilder();
         private readonly Dictionary<string, DateTime> _recent =
@@ -18,41 +18,41 @@ namespace SiliconSteelAdhesionTester.Services.Scanner
         private readonly int _duplicateSeconds;
         private DateTime _lastCharacterAt = DateTime.MinValue;
 
-        public KeyboardBarcodeScanner(int inputTimeoutMs, int minimumLength, int duplicateSeconds)
+        public KeyboardQrCodeScanner(int inputTimeoutMs, int minimumLength, int duplicateSeconds)
         {
             _inputTimeoutMs = Math.Max(30, inputTimeoutMs);
             _minimumLength = Math.Max(1, minimumLength);
             _duplicateSeconds = Math.Max(0, duplicateSeconds);
         }
 
-        public BarcodeInputResult Accept(char character, DateTime receivedAt)
+        public QrCodeInputResult Accept(char character, DateTime receivedAt)
         {
             if (character == '\r' || character == '\n' || character == '\t')
             {
-                if (_buffer.Length == 0) return BarcodeInputResult.None;
-                string barcode = Normalize(_buffer.ToString());
+                if (_buffer.Length == 0) return QrCodeInputResult.None;
+                string qrCodeContent = Normalize(_buffer.ToString());
                 Reset();
-                if (barcode.Length < _minimumLength)
-                    return BarcodeInputResult.Rejected("二维码长度不足");
-                if (barcode.Length > 256)
-                    return BarcodeInputResult.Rejected("二维码长度超过256字符");
+                if (qrCodeContent.Length < _minimumLength)
+                    return QrCodeInputResult.Rejected("二维码内容长度不足");
+                if (qrCodeContent.Length > 256)
+                    return QrCodeInputResult.Rejected("二维码内容长度超过256字符");
 
-                if (_recent.TryGetValue(barcode, out DateTime previous) &&
+                if (_recent.TryGetValue(qrCodeContent, out DateTime previous) &&
                     (receivedAt - previous).TotalSeconds < _duplicateSeconds)
-                    return BarcodeInputResult.Rejected("重复扫码已忽略：" + barcode);
+                    return QrCodeInputResult.Rejected("重复二维码已忽略：" + qrCodeContent);
 
-                _recent[barcode] = receivedAt;
+                _recent[qrCodeContent] = receivedAt;
                 RemoveExpired(receivedAt);
-                return BarcodeInputResult.Completed(barcode);
+                return QrCodeInputResult.Completed(qrCodeContent);
             }
 
-            if (char.IsControl(character)) return BarcodeInputResult.None;
+            if (char.IsControl(character)) return QrCodeInputResult.None;
             if (_lastCharacterAt != DateTime.MinValue &&
                 (receivedAt - _lastCharacterAt).TotalMilliseconds > _inputTimeoutMs)
                 _buffer.Clear();
             _lastCharacterAt = receivedAt;
             _buffer.Append(character);
-            return BarcodeInputResult.None;
+            return QrCodeInputResult.None;
 
         }
 
@@ -77,32 +77,32 @@ namespace SiliconSteelAdhesionTester.Services.Scanner
         }
     }
 
-    public sealed class BarcodeInputResult
+    public sealed class QrCodeInputResult
     {
-        private BarcodeInputResult(bool hasResult, bool accepted, string barcode, string message)
+        private QrCodeInputResult(bool hasResult, bool accepted, string qrCodeContent, string message)
         {
             HasResult = hasResult;
             Accepted = accepted;
-            Barcode = barcode;
+            QrCodeContent = qrCodeContent;
             Message = message;
         }
 
-        public static readonly BarcodeInputResult None =
-            new BarcodeInputResult(false, false, null, null);
+        public static readonly QrCodeInputResult None =
+            new QrCodeInputResult(false, false, null, null);
 
         public bool HasResult { get; }
         public bool Accepted { get; }
-        public string Barcode { get; }
+        public string QrCodeContent { get; }
         public string Message { get; }
 
-        public static BarcodeInputResult Completed(string barcode)
+        public static QrCodeInputResult Completed(string qrCodeContent)
         {
-            return new BarcodeInputResult(true, true, barcode, null);
+            return new QrCodeInputResult(true, true, qrCodeContent, null);
         }
 
-        public static BarcodeInputResult Rejected(string message)
+        public static QrCodeInputResult Rejected(string message)
         {
-            return new BarcodeInputResult(true, false, null, message);
+            return new QrCodeInputResult(true, false, null, message);
         }
     }
 }

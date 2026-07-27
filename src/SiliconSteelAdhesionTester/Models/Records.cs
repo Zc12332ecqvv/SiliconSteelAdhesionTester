@@ -5,7 +5,7 @@ namespace SiliconSteelAdhesionTester.Models
     public sealed class InspectionRecord
     {
         public long Id { get; set; }
-        public string Barcode { get; set; }
+        public string QrCodeContent { get; set; }
         public string MaterialType { get; set; }
         public double? LossRatePercent { get; set; }
         public int? ParticleCount { get; set; }

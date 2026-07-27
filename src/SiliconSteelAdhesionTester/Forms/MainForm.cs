@@ -28,8 +28,8 @@ namespace SiliconSteelAdhesionTester.Forms
         private Button[] _stationContinuous;
         private bool _automatic;
         private Label[] _flowNodes;
-        private readonly KeyboardBarcodeScanner _barcodeScanner;
-        private string _lastScannedBarcode;
+        private readonly KeyboardQrCodeScanner _qrCodeScanner;
+        private string _lastScannedQrCode;
         private bool _s2ScanAllowed;
         private bool _s3ScanAllowed;
         private bool _s2ScanResponseActive;
@@ -49,14 +49,14 @@ namespace SiliconSteelAdhesionTester.Forms
             _database = database ?? throw new ArgumentNullException(nameof(database));
             _plc = plc ?? throw new ArgumentNullException(nameof(plc));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            if (_settings.BarcodeScannerEnabled)
+            if (_settings.QrCodeScannerEnabled)
             {
-                _barcodeScanner = new KeyboardBarcodeScanner(
-                    _settings.BarcodeInputTimeoutMs,
-                    _settings.BarcodeMinimumLength,
-                    _settings.DuplicateBarcodeSeconds);
+                _qrCodeScanner = new KeyboardQrCodeScanner(
+                    _settings.QrCodeInputTimeoutMs,
+                    _settings.QrCodeMinimumLength,
+                    _settings.DuplicateQrCodeSeconds);
                 KeyPreview = true;
-                KeyPress += BarcodeKeyPress;
+                KeyPress += QrCodeKeyPress;
             }
             InitializeRuntimeBindings();
             InitializeSamplePreview();
@@ -128,7 +128,7 @@ namespace SiliconSteelAdhesionTester.Forms
             {
                 lblShiftCount.Left = overviewWidth - lblShiftCount.Width - 24;
                 lblTotalCount.Left = lblShiftCount.Left - lblTotalCount.Width - 34;
-                lblBarcode.Top = Math.Max(lblCurrentTask.Bottom + 4, (pnlOverview.ClientSize.Height - lblBarcode.Height) / 2);
+                lblQrCodeContent.Top = Math.Max(lblCurrentTask.Bottom + 4, (pnlOverview.ClientSize.Height - lblQrCodeContent.Height) / 2);
                 lblTotalCount.Top = Math.Max(0, (pnlOverview.ClientSize.Height - lblTotalCount.Height) / 2);
                 lblShiftCount.Top = lblTotalCount.Top;
             }
@@ -258,15 +258,15 @@ namespace SiliconSteelAdhesionTester.Forms
             catch (Exception ex) { ShowFault("PLC", "通讯", ex.Message); }
         }
 
-        private async void BarcodeKeyPress(object sender, KeyPressEventArgs e)
+        private async void QrCodeKeyPress(object sender, KeyPressEventArgs e)
         {
-            if (_barcodeScanner == null || (!_s2ScanAllowed && !_s3ScanAllowed))
+            if (_qrCodeScanner == null || (!_s2ScanAllowed && !_s3ScanAllowed))
             {
                 return;
             }
 
             e.Handled = true;
-            BarcodeInputResult result = _barcodeScanner.Accept(e.KeyChar, DateTime.Now);
+            QrCodeInputResult result = _qrCodeScanner.Accept(e.KeyChar, DateTime.Now);
             if (!result.HasResult) return;
 
             if (_s2ScanAllowed && _s3ScanAllowed)
@@ -283,34 +283,34 @@ namespace SiliconSteelAdhesionTester.Forms
             if (!result.Accepted)
             {
                 AppendRuntimeLog("[SCANNER] " + result.Message);
-                _database.SaveScanEvent(result.Barcode, oriented ? "取向" : "无取向", oriented ? "S2" : "S3", false, result.Message, _user.UserName);
+                _database.SaveQrCodeScanEvent(result.QrCodeContent, oriented ? "取向" : "无取向", oriented ? "S2" : "S3", false, result.Message, _user.UserName);
                 await SendScanResponseAsync(oriented, false);
                 return;
             }
 
-            RegisterBarcode(result.Barcode, oriented);
+            RegisterQrCode(result.QrCodeContent, oriented);
             await SendScanResponseAsync(oriented, true);
         }
 
-        private void RegisterBarcode(string barcode, bool oriented)
+        private void RegisterQrCode(string qrCodeContent, bool oriented)
         {
             string type = oriented ? "取向" : "无取向";
-            _lastScannedBarcode = barcode;
-            lblBarcode.Text = barcode;
-            lblCurrentTask.Text = "当前检验号 · 扫码完成，正在通知PLC";
+            _lastScannedQrCode = qrCodeContent;
+            lblQrCodeContent.Text = qrCodeContent;
+            lblCurrentTask.Text = "当前检验号 · 二维码读取完成，正在通知PLC";
             lblMaterialType.Text = type + "硅钢片";
-            SetPreviewSample(barcode);
+            SetPreviewSample(qrCodeContent);
 
             if (dgvTasks.Rows.Count == 1 &&
                 Convert.ToString(dgvTasks.Rows[0].Cells[0].Value) == "-")
                 dgvTasks.Rows.Clear();
-            dgvTasks.Rows.Insert(0, barcode, type, "扫码完成");
+            dgvTasks.Rows.Insert(0, qrCodeContent, type, "二维码读取完成");
             while (dgvTasks.Rows.Count > 100)
                 dgvTasks.Rows.RemoveAt(dgvTasks.Rows.Count - 1);
 
-            AppendRuntimeLog("[" + type + "] 二维码扫描成功：" + barcode);
-            _database.SaveScanEvent(barcode, type, oriented ? "S2" : "S3", true, "扫码成功", _user.UserName);
-            _database.LogOperation(_user.UserName, "二维码扫描", type + "工位：" + barcode);
+            AppendRuntimeLog("[" + type + "] 二维码读取成功：" + qrCodeContent);
+            _database.SaveQrCodeScanEvent(qrCodeContent, type, oriented ? "S2" : "S3", true, "二维码读取成功", _user.UserName);
+            _database.LogOperation(_user.UserName, "二维码读取", type + "工位：" + qrCodeContent);
         }
 
         private async Task SendScanResponseAsync(bool oriented, bool accepted)
@@ -365,16 +365,16 @@ namespace SiliconSteelAdhesionTester.Forms
             lblConnection.ForeColor = snapshot.Connected ? Color.ForestGreen : Color.Firebrick;
             lblTotalCount.Text = snapshot.TotalCount.ToString("N0") + "  PCS";
             lblShiftCount.Text = snapshot.ShiftCount.ToString("N0") + "  PCS";
-            string currentBarcode = !string.IsNullOrWhiteSpace(snapshot.Barcode)
-                ? snapshot.Barcode
-                : _lastScannedBarcode;
-            lblBarcode.Text = string.IsNullOrWhiteSpace(currentBarcode) ? "-" : currentBarcode;
-            lblCurrentTask.Text = string.IsNullOrWhiteSpace(currentBarcode)
-                ? "当前检验号 · 等待扫码/总控任务"
-                : string.IsNullOrWhiteSpace(snapshot.Barcode)
-                    ? "当前检验号 · 已扫码，等待总控任务"
+            string currentQrCode = !string.IsNullOrWhiteSpace(snapshot.QrCodeContent)
+                ? snapshot.QrCodeContent
+                : _lastScannedQrCode;
+            lblQrCodeContent.Text = string.IsNullOrWhiteSpace(currentQrCode) ? "-" : currentQrCode;
+            lblCurrentTask.Text = string.IsNullOrWhiteSpace(currentQrCode)
+                ? "当前检验号 · 等待二维码/总控任务"
+                : string.IsNullOrWhiteSpace(snapshot.QrCodeContent)
+                    ? "当前检验号 · 已读取二维码，等待总控任务"
                     : "当前检验号 · 正在执行";
-            SetPreviewSample(currentBarcode);
+            SetPreviewSample(currentQrCode);
             lblMode.Text = snapshot.Automatic ? "自动模式" : "手动模式";
             lblMode.BackColor = snapshot.Automatic ? Color.LimeGreen : Color.Gold;
             lblHome.Text = IsAllHome(snapshot) ? "在原位" : "未回原位";
@@ -390,13 +390,13 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             if (snapshot.S2ScanAllowed && !_s2ScanAllowed)
             {
-                _barcodeScanner?.Reset();
-                AppendRuntimeLog("[SCANNER] PLC允许S2取向工位扫码");
+                _qrCodeScanner?.Reset();
+                AppendRuntimeLog("[QR] PLC允许S2取向工位读取二维码");
             }
             if (snapshot.S3ScanAllowed && !_s3ScanAllowed)
             {
-                _barcodeScanner?.Reset();
-                AppendRuntimeLog("[SCANNER] PLC允许S3无取向工位扫码");
+                _qrCodeScanner?.Reset();
+                AppendRuntimeLog("[QR] PLC允许S3无取向工位读取二维码");
             }
 
             _s2ScanAllowed = snapshot.S2ScanAllowed;
@@ -471,7 +471,7 @@ namespace SiliconSteelAdhesionTester.Forms
             switch (station)
             {
                 case 1: return "RBT分配任务中……";
-                case 2: return "等待取向工位扫码/拍照";
+                case 2: return "等待取向工位二维码读取/拍照";
                 case 3: return "无取向折弯流程运行中";
                 default: return "磁性能检测流程运行中";
             }
@@ -517,7 +517,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 _resourcesDisposed = true;
                 _shutdown.Cancel();
                 _shutdown.Dispose();
-                KeyPress -= BarcodeKeyPress;
+                KeyPress -= QrCodeKeyPress;
                 _plc?.Dispose();
                 components?.Dispose();
             }
