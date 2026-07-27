@@ -64,10 +64,10 @@ namespace SiliconSteelAdhesionTester.Forms
             btnVision.Click += (s, e) => OpenVisionWindow();
             btnNavVision.Click += (s, e) => OpenVisionWindow();
             btnDebug.Click += (s, e) => new DebugForm(_plc, _user, _shutdown.Token).Show(this);
-            btnRecords.Click += (s, e) => MessageBox.Show("生产记录查询将在数据业务阶段接入。", "生产记录");
-            btnFaultLogs.Click += (s, e) => MessageBox.Show("故障日志查询将在报表阶段接入。", "故障日志");
-            btnNavRecords.Click += (s, e) => MessageBox.Show("生产记录查询将在数据业务阶段接入。", "检测记录");
-            btnNavLogs.Click += (s, e) => MessageBox.Show("运行日志查询将在报表阶段接入。", "运行日志");
+            btnRecords.Click += (s, e) => new DataRecordsForm(_database, false).Show(this);
+            btnFaultLogs.Click += (s, e) => new DataRecordsForm(_database, true).Show(this);
+            btnNavRecords.Click += (s, e) => new DataRecordsForm(_database, false).Show(this);
+            btnNavLogs.Click += (s, e) => new DataRecordsForm(_database, true).Show(this);
             btnNavSettings.Click += (s, e) => OpenSettingsWindow();
         }
 
@@ -122,6 +122,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 SetPreviewSample(taskId);
                 lblMaterialType.Text = oriented + "，" + nonOriented;
                 AppendRuntimeLog("[MANUAL] 已创建手动任务：" + taskId);
+                _database.SaveManualTask(taskId, dialog.OrientedCount, dialog.NonOrientedCount, _user.UserName);
                 _database.LogOperation(_user.UserName, "创建手动任务",
                     "料盘=" + (string.IsNullOrWhiteSpace(dialog.TrayNumber) ? "未填" : dialog.TrayNumber) +
                     "；" + oriented + "；" + nonOriented);
@@ -130,7 +131,7 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private void OpenVisionWindow()
         {
-            new VisionInspectionForm(new AdhesionVisionService(_settings)).Show(this);
+            new VisionInspectionForm(new AdhesionVisionService(_settings), _database, _user, _lastScannedBarcode).Show(this);
         }
 
         private void OpenSettingsWindow()

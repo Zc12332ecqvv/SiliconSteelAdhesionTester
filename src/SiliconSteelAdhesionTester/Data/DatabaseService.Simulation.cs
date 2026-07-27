@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using SiliconSteelAdhesionTester.Models;
+using SiliconSteelAdhesionTester.Services.Vision;
 
 namespace SiliconSteelAdhesionTester.Data
 {
@@ -48,6 +49,26 @@ namespace SiliconSteelAdhesionTester.Data
         {
             Append("OPERATION", userName, action, string.Empty, detail);
         }
+
+        public void SaveScanEvent(string barcode, string materialType, string station, bool accepted, string message, string userName)
+        {
+            Append("SCAN", userName, accepted ? "OK" : "NG", station, materialType + " " + barcode + " " + message);
+        }
+
+        public void SaveManualTask(string taskNo, int? orientedCount, int? nonOrientedCount, string userName)
+        {
+            Append("TASK", userName, taskNo, "Manual", "取向=" + orientedCount + " 无取向=" + nonOrientedCount);
+        }
+
+        public long SaveVisionResult(string barcode, string sourceImagePath, AdhesionVisionResult result, string userName)
+        {
+            Append("VISION", userName, result.IsQualified ? "OK" : "NG", barcode,
+                result.TestType + " 脱落率=" + result.LossRatePercent.ToString("F3") + "% 颗粒=" + result.ParticleCount + " 图片=" + result.AnnotatedImagePath);
+            return DateTime.Now.Ticks;
+        }
+
+        public List<InspectionRecord> GetInspectionRecords(string keyword, int limit) { return new List<InspectionRecord>(); }
+        public List<SystemLogRecord> GetSystemLogs(int limit) { return new List<SystemLogRecord>(); }
 
         private void Append(string type, string user, string code, string node, string message)
         {

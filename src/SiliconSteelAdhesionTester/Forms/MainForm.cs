@@ -283,6 +283,7 @@ namespace SiliconSteelAdhesionTester.Forms
             if (!result.Accepted)
             {
                 AppendRuntimeLog("[SCANNER] " + result.Message);
+                _database.SaveScanEvent(result.Barcode, oriented ? "取向" : "无取向", oriented ? "S2" : "S3", false, result.Message, _user.UserName);
                 await SendScanResponseAsync(oriented, false);
                 return;
             }
@@ -308,6 +309,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 dgvTasks.Rows.RemoveAt(dgvTasks.Rows.Count - 1);
 
             AppendRuntimeLog("[" + type + "] 二维码扫描成功：" + barcode);
+            _database.SaveScanEvent(barcode, type, oriented ? "S2" : "S3", true, "扫码成功", _user.UserName);
             _database.LogOperation(_user.UserName, "二维码扫描", type + "工位：" + barcode);
         }
 

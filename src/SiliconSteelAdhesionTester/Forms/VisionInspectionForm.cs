@@ -3,6 +3,8 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using SiliconSteelAdhesionTester.Services.Vision;
+using SiliconSteelAdhesionTester.Data;
+using SiliconSteelAdhesionTester.Models;
 
 namespace SiliconSteelAdhesionTester.Forms
 {
@@ -10,6 +12,8 @@ namespace SiliconSteelAdhesionTester.Forms
     public partial class VisionInspectionForm : Form
     {
         private readonly IAdhesionVisionService _vision;
+        private readonly DatabaseService _database;
+        private readonly UserSession _user;
 
         public VisionInspectionForm()
         {
@@ -17,10 +21,18 @@ namespace SiliconSteelAdhesionTester.Forms
         }
 
         public VisionInspectionForm(IAdhesionVisionService vision)
+            : this(vision, null, null, null)
+        {
+        }
+
+        public VisionInspectionForm(IAdhesionVisionService vision, DatabaseService database, UserSession user, string sampleId)
             : this()
         {
             _vision = vision ?? throw new ArgumentNullException(nameof(vision));
+            _database = database;
+            _user = user;
             cboMode.SelectedIndex = 0;
+            if (!string.IsNullOrWhiteSpace(sampleId)) txtSampleId.Text = sampleId;
             UpdateMode();
         }
 
@@ -86,6 +98,12 @@ namespace SiliconSteelAdhesionTester.Forms
                 lblDecision.Text = result.IsQualified ? "OK · 合格" : "NG · 不合格";
                 lblDecision.BackColor = result.IsQualified ? Color.SeaGreen : Color.Firebrick;
                 lblOutput.Text = result.AnnotatedImagePath;
+                if (_database != null)
+                {
+                    string sourcePath = cboMode.SelectedIndex == 0 ? txtAfter.Text.Trim() : txtAfter.Text.Trim();
+                    long recordId = _database.SaveVisionResult(sampleId, sourcePath, result, _user == null ? string.Empty : _user.UserName);
+                    txtLog.AppendText("已保存数据库，记录编号：" + recordId + Environment.NewLine);
+                }
                 txtLog.AppendText(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "  " + sampleId + "  " + result.Message + Environment.NewLine);
             }
             catch (Exception ex)
