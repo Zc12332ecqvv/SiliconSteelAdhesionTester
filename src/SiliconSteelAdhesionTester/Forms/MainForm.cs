@@ -355,7 +355,11 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             if (InvokeRequired) { BeginInvoke(new Action<object, PlcSnapshot>(PlcSnapshotChanged), sender, snapshot); return; }
             _latestSnapshot = snapshot;
-            lblConnection.Text = snapshot.Connected ? "● PLC在线  " + (_settings.Simulation ? "仿真模式" : _settings.PlcIp) : "● PLC离线";
+            lblConnection.Text = snapshot.Connected
+                ? "● PLC在线  " + (_settings.Simulation
+                    ? "仿真模式"
+                    : _settings.PlcIp + ":" + _settings.PlcPort)
+                : "● PLC离线";
             lblConnection.ForeColor = snapshot.Connected ? Color.ForestGreen : Color.Firebrick;
             lblTotalCount.Text = snapshot.TotalCount.ToString("N0") + "  PCS";
             lblShiftCount.Text = snapshot.ShiftCount.ToString("N0") + "  PCS";

@@ -18,7 +18,12 @@ namespace SiliconSteelAdhesionTester.Services.Plc
         public S7PlcService(AppSettings settings)
         {
             _settings = settings;
-            _plc = new S7.Net.Plc(CpuType.S71500, settings.PlcIp, settings.Rack, settings.Slot);
+            _plc = new S7.Net.Plc(
+                CpuType.S71200,
+                settings.PlcIp,
+                settings.PlcPort,
+                settings.Rack,
+                settings.Slot);
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)

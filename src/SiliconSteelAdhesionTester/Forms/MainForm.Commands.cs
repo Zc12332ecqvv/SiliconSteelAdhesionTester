@@ -68,7 +68,7 @@ namespace SiliconSteelAdhesionTester.Forms
             btnFaultLogs.Click += (s, e) => MessageBox.Show("故障日志查询将在报表阶段接入。", "故障日志");
             btnNavRecords.Click += (s, e) => MessageBox.Show("生产记录查询将在数据业务阶段接入。", "检测记录");
             btnNavLogs.Click += (s, e) => MessageBox.Show("运行日志查询将在报表阶段接入。", "运行日志");
-            btnNavSettings.Click += (s, e) => MessageBox.Show("系统设置页面将在相机、LIMS和正式判定参数确认后接入。", "系统设置");
+            btnNavSettings.Click += (s, e) => OpenSettingsWindow();
         }
 
         private bool CanSwitchOperatingMode()
@@ -131,6 +131,24 @@ namespace SiliconSteelAdhesionTester.Forms
         private void OpenVisionWindow()
         {
             new VisionInspectionForm(new AdhesionVisionService(_settings)).Show(this);
+        }
+
+        private void OpenSettingsWindow()
+        {
+            if (!_user.CanDebug)
+            {
+                MessageBox.Show("系统设置仅允许电气调试员或超级管理员修改。",
+                    "权限不足", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            using (SettingsForm dialog = new SettingsForm(_settings))
+            {
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    AppendRuntimeLog("[SETTINGS] 系统参数已保存，重启后完整生效");
+                    _database.LogOperation(_user.UserName, "修改系统设置", "设置已保存，等待重启生效");
+                }
+            }
         }
 
         private void BindStation(int station)
