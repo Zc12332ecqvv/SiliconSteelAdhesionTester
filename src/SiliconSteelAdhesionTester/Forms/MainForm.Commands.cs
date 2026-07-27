@@ -119,6 +119,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 dgvTasks.Rows.Insert(0, taskId, oriented + " / " + nonOriented, "手动任务待执行");
                 lblCurrentTask.Text = "当前任务 · 手动创建，等待启动";
                 lblBarcode.Text = taskId;
+                SetPreviewSample(taskId);
                 lblMaterialType.Text = oriented + "，" + nonOriented;
                 AppendRuntimeLog("[MANUAL] 已创建手动任务：" + taskId);
                 _database.LogOperation(_user.UserName, "创建手动任务",

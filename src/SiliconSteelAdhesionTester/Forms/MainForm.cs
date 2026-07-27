@@ -59,6 +59,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 KeyPress += BarcodeKeyPress;
             }
             InitializeRuntimeBindings();
+            InitializeSamplePreview();
             pnlProcess.Visible = false;
             pnlStationHeader.Dock = DockStyle.None;
             pnlStationHeader.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
@@ -236,9 +237,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 commandButtons[i].Size = new Size(commandWidth, commandHeight);
             }
 
-            int rightHeight = pnlStationHeader.ClientSize.Height;
-            int sectionHeight = Math.Max(160, (rightHeight - lblQueueTitle.Height - lblLogTitle.Height) / 2);
-            dgvTasks.Height = sectionHeight;
+            LayoutSamplePreviewAndTaskPanels();
 
             pnlBottom.BringToFront();
             ResumeLayout(true);
@@ -299,6 +298,7 @@ namespace SiliconSteelAdhesionTester.Forms
             lblBarcode.Text = barcode;
             lblCurrentTask.Text = "当前检验号 · 扫码完成，正在通知PLC";
             lblMaterialType.Text = type + "硅钢片";
+            SetPreviewSample(barcode);
 
             if (dgvTasks.Rows.Count == 1 &&
                 Convert.ToString(dgvTasks.Rows[0].Cells[0].Value) == "-")
@@ -368,6 +368,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 : string.IsNullOrWhiteSpace(snapshot.Barcode)
                     ? "当前检验号 · 已扫码，等待总控任务"
                     : "当前检验号 · 正在执行";
+            SetPreviewSample(currentBarcode);
             lblMode.Text = snapshot.Automatic ? "自动模式" : "手动模式";
             lblMode.BackColor = snapshot.Automatic ? Color.LimeGreen : Color.Gold;
             lblHome.Text = IsAllHome(snapshot) ? "在原位" : "未回原位";
