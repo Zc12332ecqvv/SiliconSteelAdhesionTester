@@ -8,43 +8,48 @@ namespace SiliconSteelAdhesionTester.Configuration
 {
     public sealed class AppSettings
     {
+        //plc通讯（s7西门子）
         public string PlcIp { get; set; }
         public int PlcPort { get; set; }
         public short Rack { get; set; }
         public short Slot { get; set; }
         public int PollIntervalMs { get; set; }
         public int CommandPulseMs { get; set; }
-        public int DuplicateQrCodeSeconds { get; set; }
+        public bool AutomaticDeviceInteractionsEnabled { get; set; }
+        public bool Simulation { get; set; }
+        //二维码扫码模块
         public bool QrCodeScannerEnabled { get; set; }
         public int QrCodeInputTimeoutMs { get; set; }
         public int QrCodeMinimumLength { get; set; }
+        public int DuplicateQrCodeSeconds { get; set; }
         public string OrientedScannerIp { get; set; }
-        public int OrientedScannerPort { get; set; }
         public string NonOrientedScannerIp { get; set; }
+        public int OrientedScannerPort { get; set; }
         public int NonOrientedScannerPort { get; set; }
         public int ScannerConnectTimeoutMs { get; set; }
         public int ScannerReadTimeoutMs { get; set; }
         public string ScannerTriggerCommand { get; set; }
         public string ScannerStopCommand { get; set; }
         public string ScannerTerminator { get; set; }
-        public bool AutomaticDeviceInteractionsEnabled { get; set; }
-        public string CameraInputDirectory { get; set; }
+        //相机采集配置
         public string CameraProvider { get; set; }
         public string CameraIp { get; set; }
         public string OrientedCameraIp { get; set; }
         public string NonOrientedCameraIp { get; set; }
         public int CameraCaptureTimeoutMs { get; set; }
         public int CameraFileStableMs { get; set; }
+        public string CameraInputDirectory { get; set; }
+        //视觉算法参数
         public double OrientedMaxLossRate { get; set; }
         public double NonOrientedMaxLossRate { get; set; }
         public int VisionDifferenceThreshold { get; set; }
         public int VisionMinimumParticleArea { get; set; }
         public string VisionOutputDirectory { get; set; }
+        //工厂信息
         public string SiteName { get; set; }
         public string DeviceName { get; set; }
         public string DeviceCode { get; set; }
         public string LimsEndpoint { get; set; }
-        public bool Simulation { get; set; }
 
         public static string OverrideFilePath
         {
