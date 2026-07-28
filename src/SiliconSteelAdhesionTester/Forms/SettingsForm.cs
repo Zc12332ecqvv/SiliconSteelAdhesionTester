@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Net;
 using System.Windows.Forms;
 using SiliconSteelAdhesionTester.Configuration;
@@ -45,50 +47,65 @@ namespace SiliconSteelAdhesionTester.Forms
         private readonly TextBox txtDeviceName = NewText();
         private readonly TextBox txtDeviceCode = NewText();
         private readonly TextBox txtLimsEndpoint = NewText();
+        private readonly Label lblFileState = new Label();
 
         public SettingsForm(AppSettings settings)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             Text = "系统设置";
             Font = new Font("Microsoft YaHei UI", 9.5F);
+            AutoScaleMode = AutoScaleMode.Dpi;
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(760, 620);
-            Size = new Size(900, 700);
+            MinimumSize = new Size(900, 680);
+            Size = new Size(1080, 780);
             BackColor = Color.FromArgb(238, 242, 247);
 
-            Panel header = new Panel { Dock = DockStyle.Top, Height = 76, BackColor = Color.FromArgb(18, 32, 49) };
+            Panel header = new Panel { Dock = DockStyle.Top, Height = 84, BackColor = Color.FromArgb(18, 32, 49) };
             header.Controls.Add(new Label
             {
                 Text = "系统设置",
                 ForeColor = Color.White,
                 Font = new Font("Microsoft YaHei UI", 18F, FontStyle.Bold),
                 AutoSize = true,
-                Location = new Point(24, 19)
+                Location = new Point(26, 18)
             });
             header.Controls.Add(new Label
             {
-                Text = "现场参数可配置 · 保存后重启程序生效",
+                Text = "现场参数配置中心 · 通讯类参数保存后需重启程序生效",
                 ForeColor = Color.Silver,
                 AutoSize = true,
-                Location = new Point(170, 32)
+                Location = new Point(172, 33)
             });
 
-            TabControl tabs = new TabControl { Dock = DockStyle.Fill, Padding = new Point(18, 7) };
+            TabControl tabs = new TabControl
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Point(18, 7),
+                HotTrack = true
+            };
             tabs.TabPages.Add(BuildNetworkPage());
             tabs.TabPages.Add(BuildScannerPage());
             tabs.TabPages.Add(BuildVisionPage());
             tabs.TabPages.Add(BuildSystemPage());
 
-            Panel footer = new Panel { Dock = DockStyle.Bottom, Height = 72, BackColor = Color.White };
+            Panel footer = new Panel { Dock = DockStyle.Bottom, Height = 76, BackColor = Color.White };
             Button btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Size = new Size(110, 42), Anchor = AnchorStyles.Top | AnchorStyles.Right };
             Button btnSave = new Button { Text = "保存设置", Size = new Size(130, 42), BackColor = Color.FromArgb(35, 156, 96), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Anchor = AnchorStyles.Top | AnchorStyles.Right };
             btnSave.FlatAppearance.BorderSize = 0;
             btnSave.Click += SaveClicked;
+            lblFileState.AutoSize = false;
+            lblFileState.ForeColor = Color.DimGray;
+            lblFileState.TextAlign = ContentAlignment.MiddleLeft;
+            lblFileState.AutoEllipsis = true;
+            lblFileState.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             footer.Resize += (s, e) =>
             {
-                btnSave.Location = new Point(footer.ClientSize.Width - btnSave.Width - 22, 15);
-                btnCancel.Location = new Point(btnSave.Left - btnCancel.Width - 12, 15);
+                btnSave.Location = new Point(footer.ClientSize.Width - btnSave.Width - 24, 17);
+                btnCancel.Location = new Point(btnSave.Left - btnCancel.Width - 12, 17);
+                lblFileState.Location = new Point(24, 17);
+                lblFileState.Size = new Size(Math.Max(120, btnCancel.Left - 48), 42);
             };
+            footer.Controls.Add(lblFileState);
             footer.Controls.Add(btnCancel);
             footer.Controls.Add(btnSave);
 
@@ -98,14 +115,20 @@ namespace SiliconSteelAdhesionTester.Forms
             AcceptButton = btnSave;
             CancelButton = btnCancel;
             LoadValues();
+            UpdateFileState();
         }
 
         private TabPage BuildNetworkPage()
         {
             TabPage page = NewPage("网络与PLC");
             TableLayoutPanel table = NewTable();
+#if SIMULATION_ONLY
+            cboPlcMode.Items.Add("仿真模式（当前构建）");
+            AddRow(table, "运行模式", cboPlcMode, "当前为安全仿真构建，不会连接或写入实体PLC");
+#else
             cboPlcMode.Items.AddRange(new object[] { "仿真模式", "S7实体PLC" });
-            AddRow(table, "运行模式", cboPlcMode, "修改PLC模式、IP或端口后必须重启程序");
+            AddRow(table, "运行模式", cboPlcMode, "切换运行模式后必须重启程序");
+#endif
             AddRow(table, "PLC IP", txtPlcIp, "西门子S7-1200");
             AddRow(table, "PLC端口", numPlcPort, "现场确认使用502");
             AddRow(table, "Rack / Slot", Pair(numRack, numSlot), "默认0 / 1");
@@ -165,22 +188,47 @@ namespace SiliconSteelAdhesionTester.Forms
             AddRow(table, "设备名称", txtDeviceName, "显示及数据追溯使用");
             AddRow(table, "设备编号", txtDeviceCode, "厂内唯一编号");
             AddRow(table, "LIMS接口地址", txtLimsEndpoint, "接口确认后由业务服务使用");
-            Label saveLocation = new Label
+
+            TextBox path = NewText();
+            path.ReadOnly = true;
+            path.BackColor = Color.FromArgb(248, 250, 252);
+            path.Text = AppSettings.OverrideFilePath;
+            AddRow(table, "设置文件", path, "首次启动自动创建，保存时生成.bak备份");
+
+            FlowLayoutPanel fileActions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = Padding.Empty
+            };
+            Button btnOpenDirectory = NewSecondaryButton("打开目录", 128);
+            Button btnCopyPath = NewSecondaryButton("复制路径", 128);
+            btnOpenDirectory.Click += (s, e) => OpenSettingsDirectory();
+            btnCopyPath.Click += (s, e) => CopySettingsPath();
+            fileActions.Controls.Add(btnOpenDirectory);
+            fileActions.Controls.Add(btnCopyPath);
+            AddRow(table, "快捷操作", fileActions, "便于现场备份、查看或替换配置");
+
+            Label securityNote = new Label
             {
                 AutoSize = false,
-                Height = 54,
                 ForeColor = Color.DimGray,
-                Text = "设置文件：" + AppSettings.OverrideFilePath + Environment.NewLine +
-                       "数据库密码不在本页面明文保存；正式数据库接口确定后使用受保护凭据。"
+                TextAlign = ContentAlignment.MiddleLeft,
+                Text = "此文件仅保存设备和算法参数，不保存数据库密码。"
             };
-            AddRow(table, "保存说明", saveLocation, string.Empty);
+            AddRow(table, "安全说明", securityNote, "正式接口凭据应使用受保护存储");
             page.Controls.Add(Wrap(table));
             return page;
         }
 
         private void LoadValues()
         {
+#if SIMULATION_ONLY
+            cboPlcMode.SelectedIndex = 0;
+#else
             cboPlcMode.SelectedIndex = _settings.Simulation ? 0 : 1;
+#endif
             txtPlcIp.Text = _settings.PlcIp;
             numPlcPort.Value = Clamp(numPlcPort, _settings.PlcPort);
             numRack.Value = Clamp(numRack, _settings.Rack);
@@ -221,13 +269,18 @@ namespace SiliconSteelAdhesionTester.Forms
         private void SaveClicked(object sender, EventArgs e)
         {
             string error;
-            if (!ValidateIp(txtPlcIp.Text, "PLC IP", out error) ||
-                !ValidateIp(txtOrientedIp.Text, "取向二维码读取器IP", out error) ||
-                !ValidateIp(txtNonOrientedIp.Text, "无取向二维码读取器IP", out error) ||
-                (!string.IsNullOrWhiteSpace(txtOrientedCameraIp.Text) &&
-                 !ValidateIp(txtOrientedCameraIp.Text, "有取向相机IP", out error)) ||
-                (!string.IsNullOrWhiteSpace(txtNonOrientedCameraIp.Text) &&
-                 !ValidateIp(txtNonOrientedCameraIp.Text, "无取向相机IP", out error)))
+#if SIMULATION_ONLY
+            bool useEntityPlc = false;
+#else
+            bool useEntityPlc = cboPlcMode.SelectedIndex == 1;
+#endif
+            bool useTcpScanner = chkScannerEnabled.Checked;
+            bool useMvsCamera = cboCameraProvider.SelectedIndex == 0;
+            if ((useEntityPlc && !ValidateIp(txtPlcIp.Text, "PLC IP", out error)) ||
+                (useTcpScanner && !ValidateIp(txtOrientedIp.Text, "取向二维码读取器IP", out error)) ||
+                (useTcpScanner && !ValidateIp(txtNonOrientedIp.Text, "无取向二维码读取器IP", out error)) ||
+                (useMvsCamera && !ValidateIp(txtOrientedCameraIp.Text, "有取向相机IP", out error)) ||
+                (useMvsCamera && !ValidateIp(txtNonOrientedCameraIp.Text, "无取向相机IP", out error)))
             {
                 MessageBox.Show(this, error, "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -240,14 +293,22 @@ namespace SiliconSteelAdhesionTester.Forms
                 MessageBox.Show(this, "LIMS接口地址必须是完整的HTTP或HTTPS地址。", "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            if (string.IsNullOrWhiteSpace(txtVisionDirectory.Text) ||
-                string.IsNullOrWhiteSpace(txtCameraInputDirectory.Text))
+            if (string.IsNullOrWhiteSpace(txtVisionDirectory.Text))
             {
                 MessageBox.Show(this, "图片保存目录不能为空。", "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+            if (!useMvsCamera && string.IsNullOrWhiteSpace(txtCameraInputDirectory.Text))
+            {
+                MessageBox.Show(this, "文件夹落图模式下，相机落图目录不能为空。", "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
+#if SIMULATION_ONLY
+            _settings.Simulation = true;
+#else
             _settings.Simulation = cboPlcMode.SelectedIndex == 0;
+#endif
             _settings.PlcIp = txtPlcIp.Text.Trim();
             _settings.PlcPort = (int)numPlcPort.Value;
             _settings.Rack = (short)numRack.Value;
@@ -286,7 +347,9 @@ namespace SiliconSteelAdhesionTester.Forms
             try
             {
                 _settings.SaveOverrides();
-                MessageBox.Show(this, "设置已保存。请重启程序，使PLC和二维码读取通讯参数完整生效。",
+                UpdateFileState();
+                MessageBox.Show(this, "设置已保存到：" + Environment.NewLine + AppSettings.OverrideFilePath +
+                    Environment.NewLine + Environment.NewLine + "请重启程序，使通讯类参数完整生效。",
                     "保存成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 DialogResult = DialogResult.OK;
                 Close();
@@ -310,6 +373,56 @@ namespace SiliconSteelAdhesionTester.Forms
             return true;
         }
 
+        private void UpdateFileState()
+        {
+            bool exists = File.Exists(AppSettings.OverrideFilePath);
+            lblFileState.Text = exists
+                ? "配置文件已就绪：" + AppSettings.OverrideFilePath
+                : "配置文件尚未创建，点击“保存设置”后生成。";
+            lblFileState.ForeColor = exists ? Color.FromArgb(38, 119, 78) : Color.DarkOrange;
+            if (!string.IsNullOrWhiteSpace(AppSettings.LastLoadWarning))
+            {
+                lblFileState.Text = AppSettings.LastLoadWarning;
+                lblFileState.ForeColor = Color.Firebrick;
+            }
+        }
+
+        private void OpenSettingsDirectory()
+        {
+            try
+            {
+                Directory.CreateDirectory(AppSettings.OverrideDirectoryPath);
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = File.Exists(AppSettings.OverrideFilePath)
+                        ? "/select,\"" + AppSettings.OverrideFilePath + "\""
+                        : "\"" + AppSettings.OverrideDirectoryPath + "\"",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "无法打开设置目录：" + ex.Message,
+                    "打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void CopySettingsPath()
+        {
+            try
+            {
+                Clipboard.SetText(AppSettings.OverrideFilePath);
+                MessageBox.Show(this, "设置文件路径已复制到剪贴板。",
+                    "复制成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "复制路径失败：" + ex.Message,
+                    "复制失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private static TabPage NewPage(string text)
         {
             return new TabPage { Text = text, BackColor = Color.White, Padding = new Padding(18) };
@@ -325,9 +438,9 @@ namespace SiliconSteelAdhesionTester.Forms
                 Padding = new Padding(8),
                 BackColor = Color.White
             };
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52));
             return table;
         }
 
@@ -369,6 +482,21 @@ namespace SiliconSteelAdhesionTester.Forms
         private static ComboBox NewCombo() { return new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList }; }
         private static NumericUpDown NewNumber(decimal min, decimal max) { return new NumericUpDown { Minimum = min, Maximum = max, ThousandsSeparator = true }; }
         private static NumericUpDown NewDecimal(decimal min, decimal max) { return new NumericUpDown { Minimum = min, Maximum = max, DecimalPlaces = 3, Increment = 0.1M }; }
+        private static Button NewSecondaryButton(string text, int width)
+        {
+            Button button = new Button
+            {
+                Text = text,
+                Width = width,
+                Height = 34,
+                BackColor = Color.FromArgb(232, 239, 247),
+                ForeColor = Color.FromArgb(25, 67, 105),
+                FlatStyle = FlatStyle.Flat,
+                Margin = new Padding(4, 3, 8, 3)
+            };
+            button.FlatAppearance.BorderColor = Color.FromArgb(188, 205, 222);
+            return button;
+        }
         private static decimal Clamp(NumericUpDown control, decimal value) { return Math.Max(control.Minimum, Math.Min(control.Maximum, value)); }
     }
 }

@@ -51,46 +51,54 @@ namespace SiliconSteelAdhesionTester.Configuration
         public string DeviceCode { get; set; }
         public string LimsEndpoint { get; set; }
 
+        public static string OverrideDirectoryPath
+        {
+            get { return Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data")); }
+        }
+
         public static string OverrideFilePath
         {
-            get { return Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data", "SystemSettings.xml")); }
+            get { return Path.Combine(OverrideDirectoryPath, "SystemSettings.xml"); }
         }
+
+        public static string LastLoadWarning { get; private set; }
 
         public static AppSettings Load()
         {
+            LastLoadWarning = null;
             AppSettings settings = new AppSettings
             {
                 PlcIp = Read("PlcIp", "192.168.3.2"),
-                PlcPort = int.Parse(Read("PlcPort", "502")),
-                Rack = short.Parse(Read("PlcRack", "0")),
-                Slot = short.Parse(Read("PlcSlot", "1")),
-                PollIntervalMs = int.Parse(Read("PollIntervalMs", "250")),
-                CommandPulseMs = int.Parse(Read("CommandPulseMs", "300")),
-                DuplicateQrCodeSeconds = int.Parse(ReadCompatible("DuplicateQrCodeSeconds", "DuplicateBarcodeSeconds", "30")),
-                QrCodeScannerEnabled = bool.Parse(ReadCompatible("QrCodeScannerEnabled", "BarcodeScannerEnabled", "true")),
-                QrCodeInputTimeoutMs = int.Parse(ReadCompatible("QrCodeInputTimeoutMs", "BarcodeInputTimeoutMs", "120")),
-                QrCodeMinimumLength = int.Parse(ReadCompatible("QrCodeMinimumLength", "BarcodeMinimumLength", "4")),
+                PlcPort = ReadInt("PlcPort", 502),
+                Rack = ReadShort("PlcRack", 0),
+                Slot = ReadShort("PlcSlot", 1),
+                PollIntervalMs = ReadInt("PollIntervalMs", 250),
+                CommandPulseMs = ReadInt("CommandPulseMs", 300),
+                DuplicateQrCodeSeconds = ReadCompatibleInt("DuplicateQrCodeSeconds", "DuplicateBarcodeSeconds", 30),
+                QrCodeScannerEnabled = ReadCompatibleBool("QrCodeScannerEnabled", "BarcodeScannerEnabled", true),
+                QrCodeInputTimeoutMs = ReadCompatibleInt("QrCodeInputTimeoutMs", "BarcodeInputTimeoutMs", 120),
+                QrCodeMinimumLength = ReadCompatibleInt("QrCodeMinimumLength", "BarcodeMinimumLength", 4),
                 OrientedScannerIp = Read("OrientedScannerIp", "192.168.3.11"),
-                OrientedScannerPort = int.Parse(Read("OrientedScannerPort", "9004")),
+                OrientedScannerPort = ReadInt("OrientedScannerPort", 9004),
                 NonOrientedScannerIp = Read("NonOrientedScannerIp", "192.168.3.12"),
-                NonOrientedScannerPort = int.Parse(Read("NonOrientedScannerPort", "9004")),
-                ScannerConnectTimeoutMs = int.Parse(Read("ScannerConnectTimeoutMs", "3000")),
-                ScannerReadTimeoutMs = int.Parse(Read("ScannerReadTimeoutMs", "5000")),
+                NonOrientedScannerPort = ReadInt("NonOrientedScannerPort", 9004),
+                ScannerConnectTimeoutMs = ReadInt("ScannerConnectTimeoutMs", 3000),
+                ScannerReadTimeoutMs = ReadInt("ScannerReadTimeoutMs", 5000),
                 ScannerTriggerCommand = Read("ScannerTriggerCommand", string.Empty),
                 ScannerStopCommand = Read("ScannerStopCommand", string.Empty),
                 ScannerTerminator = Read("ScannerTerminator", "CR"),
-                AutomaticDeviceInteractionsEnabled = bool.Parse(Read("AutomaticDeviceInteractionsEnabled", "true")),
+                AutomaticDeviceInteractionsEnabled = ReadBool("AutomaticDeviceInteractionsEnabled", true),
                 CameraInputDirectory = Read("CameraInputDirectory", "CameraInput"),
                 CameraProvider = Read("CameraProvider", "Folder"),
                 CameraIp = Read("CameraIp", string.Empty),
                 OrientedCameraIp = Read("OrientedCameraIp", Read("CameraIp", string.Empty)),
                 NonOrientedCameraIp = Read("NonOrientedCameraIp", Read("CameraIp", string.Empty)),
-                CameraCaptureTimeoutMs = int.Parse(Read("CameraCaptureTimeoutMs", "10000")),
-                CameraFileStableMs = int.Parse(Read("CameraFileStableMs", "300")),
-                OrientedMaxLossRate = double.Parse(Read("OrientedMaxLossRate", "3.0"), CultureInfo.InvariantCulture),
-                NonOrientedMaxLossRate = double.Parse(Read("NonOrientedMaxLossRate", "3.0"), CultureInfo.InvariantCulture),
-                VisionDifferenceThreshold = int.Parse(Read("VisionDifferenceThreshold", "28")),
-                VisionMinimumParticleArea = int.Parse(Read("VisionMinimumParticleArea", "20")),
+                CameraCaptureTimeoutMs = ReadInt("CameraCaptureTimeoutMs", 10000),
+                CameraFileStableMs = ReadInt("CameraFileStableMs", 300),
+                OrientedMaxLossRate = ReadDouble("OrientedMaxLossRate", 3.0),
+                NonOrientedMaxLossRate = ReadDouble("NonOrientedMaxLossRate", 3.0),
+                VisionDifferenceThreshold = ReadInt("VisionDifferenceThreshold", 28),
+                VisionMinimumParticleArea = ReadInt("VisionMinimumParticleArea", 20),
                 VisionOutputDirectory = Read("VisionOutputDirectory", "VisionResults"),
                 SiteName = Read("SiteName", string.Empty),
                 DeviceName = Read("DeviceName", "硅钢附着力测试仪"),
@@ -99,59 +107,85 @@ namespace SiliconSteelAdhesionTester.Configuration
                 Simulation = Read("PlcMode", "Simulation").Equals("Simulation", StringComparison.OrdinalIgnoreCase)
             };
             settings.ApplyOverrides();
+#if SIMULATION_ONLY
+            settings.Simulation = true;
+#endif
+            if (!File.Exists(OverrideFilePath))
+            {
+                try
+                {
+                    settings.SaveOverrides();
+                }
+                catch (IOException ex)
+                {
+                    LastLoadWarning = "首次创建设置文件失败：" + ex.Message;
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    LastLoadWarning = "没有权限创建设置文件：" + ex.Message;
+                }
+            }
             return settings;
         }
 
+        // 保存可由现场人员修改的覆盖配置；App.config仍作为缺省值来源。
         public void SaveOverrides()
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(OverrideFilePath));
+            Directory.CreateDirectory(OverrideDirectoryPath);
             string temporaryPath = OverrideFilePath + ".tmp";
             XmlWriterSettings writerSettings = new XmlWriterSettings { Indent = true };
-            using (XmlWriter writer = XmlWriter.Create(temporaryPath, writerSettings))
+            try
             {
-                writer.WriteStartElement("SystemSettings");
-                Write(writer, "PlcMode", Simulation ? "Simulation" : "S7");
-                Write(writer, "PlcIp", PlcIp);
-                Write(writer, "PlcPort", PlcPort);
-                Write(writer, "PlcRack", Rack);
-                Write(writer, "PlcSlot", Slot);
-                Write(writer, "PollIntervalMs", PollIntervalMs);
-                Write(writer, "CommandPulseMs", CommandPulseMs);
-                Write(writer, "QrCodeScannerEnabled", QrCodeScannerEnabled);
-                Write(writer, "QrCodeInputTimeoutMs", QrCodeInputTimeoutMs);
-                Write(writer, "QrCodeMinimumLength", QrCodeMinimumLength);
-                Write(writer, "DuplicateQrCodeSeconds", DuplicateQrCodeSeconds);
-                Write(writer, "OrientedScannerIp", OrientedScannerIp);
-                Write(writer, "OrientedScannerPort", OrientedScannerPort);
-                Write(writer, "NonOrientedScannerIp", NonOrientedScannerIp);
-                Write(writer, "NonOrientedScannerPort", NonOrientedScannerPort);
-                Write(writer, "ScannerConnectTimeoutMs", ScannerConnectTimeoutMs);
-                Write(writer, "ScannerReadTimeoutMs", ScannerReadTimeoutMs);
-                Write(writer, "ScannerTriggerCommand", ScannerTriggerCommand);
-                Write(writer, "ScannerStopCommand", ScannerStopCommand);
-                Write(writer, "ScannerTerminator", ScannerTerminator);
-                Write(writer, "AutomaticDeviceInteractionsEnabled", AutomaticDeviceInteractionsEnabled);
-                Write(writer, "CameraInputDirectory", CameraInputDirectory);
-                Write(writer, "CameraProvider", CameraProvider);
-                Write(writer, "OrientedCameraIp", OrientedCameraIp);
-                Write(writer, "NonOrientedCameraIp", NonOrientedCameraIp);
-                Write(writer, "CameraCaptureTimeoutMs", CameraCaptureTimeoutMs);
-                Write(writer, "CameraFileStableMs", CameraFileStableMs);
-                Write(writer, "OrientedMaxLossRate", OrientedMaxLossRate.ToString(CultureInfo.InvariantCulture));
-                Write(writer, "NonOrientedMaxLossRate", NonOrientedMaxLossRate.ToString(CultureInfo.InvariantCulture));
-                Write(writer, "VisionDifferenceThreshold", VisionDifferenceThreshold);
-                Write(writer, "VisionMinimumParticleArea", VisionMinimumParticleArea);
-                Write(writer, "VisionOutputDirectory", VisionOutputDirectory);
-                Write(writer, "SiteName", SiteName);
-                Write(writer, "DeviceName", DeviceName);
-                Write(writer, "DeviceCode", DeviceCode);
-                Write(writer, "LimsEndpoint", LimsEndpoint);
-                writer.WriteEndElement();
+                using (XmlWriter writer = XmlWriter.Create(temporaryPath, writerSettings))
+                {
+                    writer.WriteStartElement("SystemSettings");
+                    Write(writer, "PlcMode", Simulation ? "Simulation" : "S7");
+                    Write(writer, "PlcIp", PlcIp);
+                    Write(writer, "PlcPort", PlcPort);
+                    Write(writer, "PlcRack", Rack);
+                    Write(writer, "PlcSlot", Slot);
+                    Write(writer, "PollIntervalMs", PollIntervalMs);
+                    Write(writer, "CommandPulseMs", CommandPulseMs);
+                    Write(writer, "QrCodeScannerEnabled", QrCodeScannerEnabled);
+                    Write(writer, "QrCodeInputTimeoutMs", QrCodeInputTimeoutMs);
+                    Write(writer, "QrCodeMinimumLength", QrCodeMinimumLength);
+                    Write(writer, "DuplicateQrCodeSeconds", DuplicateQrCodeSeconds);
+                    Write(writer, "OrientedScannerIp", OrientedScannerIp);
+                    Write(writer, "OrientedScannerPort", OrientedScannerPort);
+                    Write(writer, "NonOrientedScannerIp", NonOrientedScannerIp);
+                    Write(writer, "NonOrientedScannerPort", NonOrientedScannerPort);
+                    Write(writer, "ScannerConnectTimeoutMs", ScannerConnectTimeoutMs);
+                    Write(writer, "ScannerReadTimeoutMs", ScannerReadTimeoutMs);
+                    Write(writer, "ScannerTriggerCommand", ScannerTriggerCommand);
+                    Write(writer, "ScannerStopCommand", ScannerStopCommand);
+                    Write(writer, "ScannerTerminator", ScannerTerminator);
+                    Write(writer, "AutomaticDeviceInteractionsEnabled", AutomaticDeviceInteractionsEnabled);
+                    Write(writer, "CameraInputDirectory", CameraInputDirectory);
+                    Write(writer, "CameraProvider", CameraProvider);
+                    Write(writer, "OrientedCameraIp", OrientedCameraIp);
+                    Write(writer, "NonOrientedCameraIp", NonOrientedCameraIp);
+                    Write(writer, "CameraCaptureTimeoutMs", CameraCaptureTimeoutMs);
+                    Write(writer, "CameraFileStableMs", CameraFileStableMs);
+                    Write(writer, "OrientedMaxLossRate", OrientedMaxLossRate.ToString(CultureInfo.InvariantCulture));
+                    Write(writer, "NonOrientedMaxLossRate", NonOrientedMaxLossRate.ToString(CultureInfo.InvariantCulture));
+                    Write(writer, "VisionDifferenceThreshold", VisionDifferenceThreshold);
+                    Write(writer, "VisionMinimumParticleArea", VisionMinimumParticleArea);
+                    Write(writer, "VisionOutputDirectory", VisionOutputDirectory);
+                    Write(writer, "SiteName", SiteName);
+                    Write(writer, "DeviceName", DeviceName);
+                    Write(writer, "DeviceCode", DeviceCode);
+                    Write(writer, "LimsEndpoint", LimsEndpoint);
+                    writer.WriteEndElement();
+                }
+                if (File.Exists(OverrideFilePath))
+                    File.Replace(temporaryPath, OverrideFilePath, OverrideFilePath + ".bak", true);
+                else
+                    File.Move(temporaryPath, OverrideFilePath);
             }
-            if (File.Exists(OverrideFilePath))
-                File.Replace(temporaryPath, OverrideFilePath, OverrideFilePath + ".bak", true);
-            else
-                File.Move(temporaryPath, OverrideFilePath);
+            finally
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            }
         }
 
         private void ApplyOverrides()
@@ -159,10 +193,22 @@ namespace SiliconSteelAdhesionTester.Configuration
             if (!File.Exists(OverrideFilePath)) return;
             XmlDocument document = new XmlDocument();
             try { document.Load(OverrideFilePath); }
-            catch (XmlException) { return; }
-            catch (IOException) { return; }
+            catch (XmlException ex)
+            {
+                LastLoadWarning = "设置文件XML格式无效，已使用默认值：" + ex.Message;
+                return;
+            }
+            catch (IOException ex)
+            {
+                LastLoadWarning = "设置文件读取失败，已使用默认值：" + ex.Message;
+                return;
+            }
             XmlElement root = document.DocumentElement;
-            if (root == null || root.Name != "SystemSettings") return;
+            if (root == null || root.Name != "SystemSettings")
+            {
+                LastLoadWarning = "设置文件根节点必须是SystemSettings，已使用默认值。";
+                return;
+            }
             PlcIp = Value(root, "PlcIp", PlcIp);
             PlcPort = IntValue(root, "PlcPort", PlcPort);
             Rack = (short)IntValue(root, "PlcRack", Rack);
@@ -242,6 +288,44 @@ namespace SiliconSteelAdhesionTester.Configuration
         private static string ReadCompatible(string key, string legacyKey, string fallback)
         {
             return ConfigurationManager.AppSettings[key] ?? ConfigurationManager.AppSettings[legacyKey] ?? fallback;
+        }
+
+        private static int ReadInt(string key, int fallback)
+        {
+            int value;
+            return int.TryParse(Read(key, string.Empty), out value) ? value : fallback;
+        }
+
+        private static int ReadCompatibleInt(string key, string legacyKey, int fallback)
+        {
+            int value;
+            return int.TryParse(ReadCompatible(key, legacyKey, string.Empty), out value) ? value : fallback;
+        }
+
+        private static short ReadShort(string key, short fallback)
+        {
+            short value;
+            return short.TryParse(Read(key, string.Empty), out value) ? value : fallback;
+        }
+
+        private static bool ReadBool(string key, bool fallback)
+        {
+            bool value;
+            return bool.TryParse(Read(key, string.Empty), out value) ? value : fallback;
+        }
+
+        private static bool ReadCompatibleBool(string key, string legacyKey, bool fallback)
+        {
+            bool value;
+            return bool.TryParse(ReadCompatible(key, legacyKey, string.Empty), out value) ? value : fallback;
+        }
+
+        private static double ReadDouble(string key, double fallback)
+        {
+            double value;
+            return double.TryParse(Read(key, string.Empty), NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+                ? value
+                : fallback;
         }
     }
 }
