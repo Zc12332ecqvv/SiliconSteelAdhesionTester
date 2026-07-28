@@ -27,6 +27,14 @@ namespace SiliconSteelAdhesionTester.Configuration
         public string ScannerTriggerCommand { get; set; }
         public string ScannerStopCommand { get; set; }
         public string ScannerTerminator { get; set; }
+        public bool AutomaticDeviceInteractionsEnabled { get; set; }
+        public string CameraInputDirectory { get; set; }
+        public string CameraProvider { get; set; }
+        public string CameraIp { get; set; }
+        public string OrientedCameraIp { get; set; }
+        public string NonOrientedCameraIp { get; set; }
+        public int CameraCaptureTimeoutMs { get; set; }
+        public int CameraFileStableMs { get; set; }
         public double OrientedMaxLossRate { get; set; }
         public double NonOrientedMaxLossRate { get; set; }
         public int VisionDifferenceThreshold { get; set; }
@@ -40,7 +48,7 @@ namespace SiliconSteelAdhesionTester.Configuration
 
         public static string OverrideFilePath
         {
-            get { return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "SystemSettings.xml"); }
+            get { return Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data", "SystemSettings.xml")); }
         }
 
         public static AppSettings Load()
@@ -66,6 +74,14 @@ namespace SiliconSteelAdhesionTester.Configuration
                 ScannerTriggerCommand = Read("ScannerTriggerCommand", string.Empty),
                 ScannerStopCommand = Read("ScannerStopCommand", string.Empty),
                 ScannerTerminator = Read("ScannerTerminator", "CR"),
+                AutomaticDeviceInteractionsEnabled = bool.Parse(Read("AutomaticDeviceInteractionsEnabled", "true")),
+                CameraInputDirectory = Read("CameraInputDirectory", "CameraInput"),
+                CameraProvider = Read("CameraProvider", "Folder"),
+                CameraIp = Read("CameraIp", string.Empty),
+                OrientedCameraIp = Read("OrientedCameraIp", Read("CameraIp", string.Empty)),
+                NonOrientedCameraIp = Read("NonOrientedCameraIp", Read("CameraIp", string.Empty)),
+                CameraCaptureTimeoutMs = int.Parse(Read("CameraCaptureTimeoutMs", "10000")),
+                CameraFileStableMs = int.Parse(Read("CameraFileStableMs", "300")),
                 OrientedMaxLossRate = double.Parse(Read("OrientedMaxLossRate", "3.0"), CultureInfo.InvariantCulture),
                 NonOrientedMaxLossRate = double.Parse(Read("NonOrientedMaxLossRate", "3.0"), CultureInfo.InvariantCulture),
                 VisionDifferenceThreshold = int.Parse(Read("VisionDifferenceThreshold", "28")),
@@ -109,6 +125,13 @@ namespace SiliconSteelAdhesionTester.Configuration
                 Write(writer, "ScannerTriggerCommand", ScannerTriggerCommand);
                 Write(writer, "ScannerStopCommand", ScannerStopCommand);
                 Write(writer, "ScannerTerminator", ScannerTerminator);
+                Write(writer, "AutomaticDeviceInteractionsEnabled", AutomaticDeviceInteractionsEnabled);
+                Write(writer, "CameraInputDirectory", CameraInputDirectory);
+                Write(writer, "CameraProvider", CameraProvider);
+                Write(writer, "OrientedCameraIp", OrientedCameraIp);
+                Write(writer, "NonOrientedCameraIp", NonOrientedCameraIp);
+                Write(writer, "CameraCaptureTimeoutMs", CameraCaptureTimeoutMs);
+                Write(writer, "CameraFileStableMs", CameraFileStableMs);
                 Write(writer, "OrientedMaxLossRate", OrientedMaxLossRate.ToString(CultureInfo.InvariantCulture));
                 Write(writer, "NonOrientedMaxLossRate", NonOrientedMaxLossRate.ToString(CultureInfo.InvariantCulture));
                 Write(writer, "VisionDifferenceThreshold", VisionDifferenceThreshold);
@@ -154,6 +177,14 @@ namespace SiliconSteelAdhesionTester.Configuration
             ScannerTriggerCommand = Value(root, "ScannerTriggerCommand", ScannerTriggerCommand);
             ScannerStopCommand = Value(root, "ScannerStopCommand", ScannerStopCommand);
             ScannerTerminator = Value(root, "ScannerTerminator", ScannerTerminator);
+            AutomaticDeviceInteractionsEnabled = BoolValue(root, "AutomaticDeviceInteractionsEnabled", AutomaticDeviceInteractionsEnabled);
+            CameraInputDirectory = Value(root, "CameraInputDirectory", CameraInputDirectory);
+            CameraProvider = Value(root, "CameraProvider", CameraProvider);
+            CameraIp = Value(root, "CameraIp", CameraIp);
+            OrientedCameraIp = Value(root, "OrientedCameraIp", string.IsNullOrWhiteSpace(OrientedCameraIp) ? CameraIp : OrientedCameraIp);
+            NonOrientedCameraIp = Value(root, "NonOrientedCameraIp", string.IsNullOrWhiteSpace(NonOrientedCameraIp) ? CameraIp : NonOrientedCameraIp);
+            CameraCaptureTimeoutMs = IntValue(root, "CameraCaptureTimeoutMs", CameraCaptureTimeoutMs);
+            CameraFileStableMs = IntValue(root, "CameraFileStableMs", CameraFileStableMs);
             OrientedMaxLossRate = DoubleValue(root, "OrientedMaxLossRate", OrientedMaxLossRate);
             NonOrientedMaxLossRate = DoubleValue(root, "NonOrientedMaxLossRate", NonOrientedMaxLossRate);
             VisionDifferenceThreshold = IntValue(root, "VisionDifferenceThreshold", VisionDifferenceThreshold);

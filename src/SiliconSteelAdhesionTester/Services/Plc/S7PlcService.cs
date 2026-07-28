@@ -61,6 +61,9 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                         FlowPaused = !lineRunning,
                         S2ScanAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2ScanAllowed, cancellationToken).ConfigureAwait(false)),
                         S3ScanAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S3ScanAllowed, cancellationToken).ConfigureAwait(false)),
+                        S2FirstPhotoAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2FirstPhotoAllowed, cancellationToken).ConfigureAwait(false)),
+                        S2SecondPhotoAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2SecondPhotoAllowed, cancellationToken).ConfigureAwait(false)),
+                        S4PhotoAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S4CameraAllowed, cancellationToken).ConfigureAwait(false)),
                         FlowMessage = "实体PLC流程状态（根据四工位自动步骤推算）"
                     });
                 }

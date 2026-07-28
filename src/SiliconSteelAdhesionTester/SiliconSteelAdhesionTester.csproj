@@ -38,11 +38,21 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(SimulationOnly)' == 'true' ">
     <DefineConstants>$(DefineConstants);SIMULATION_ONLY</DefineConstants>
+    <OutputPath>bin\$(Configuration)\Simulation\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\Simulation\</IntermediateOutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(SimulationOnly)' != 'true' ">
+    <OutputPath>bin\$(Configuration)\Entity\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\Entity\</IntermediateOutputPath>
   </PropertyGroup>
   <ItemGroup>
     <!-- 旧式 .NET Framework 项目需要显式编译引用；PackageReference 负责还原和运行时资产。 -->
     <Reference Include="OpenCvSharp">
       <HintPath>lib\OpenCvSharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="MvCameraControl.Net">
+      <HintPath>lib\MvCameraControl.Net.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Buffers">
@@ -119,6 +129,10 @@
       <DependentUpon>MainForm.cs</DependentUpon>
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Forms\MainForm.Automation.cs">
+      <DependentUpon>MainForm.cs</DependentUpon>
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Forms\MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
@@ -133,13 +147,20 @@
     <Compile Include="Configuration\AppSettings.cs" />
     <Compile Include="Services\Plc\IPlcService.cs" />
     <Compile Include="Services\Scanner\KeyboardQrCodeScanner.cs" />
+    <Compile Include="Services\Scanner\TcpQrCodeReader.cs" />
     <Compile Include="Services\Vision\AdhesionVisionService.cs" />
     <Compile Include="Services\Vision\IAdhesionVisionService.cs" />
+    <Compile Include="Services\Vision\FolderImageAcquisitionService.cs" />
+    <Compile Include="Services\Vision\MvsImageAcquisitionService.cs" />
     <Compile Include="Services\Plc\PlcAddresses.cs" />
     <Compile Include="Services\Plc\PlcServiceFactory.cs" />
     <Compile Include="Services\Plc\SimulationPlcService.cs" />
     <None Include="App.config" />
     <None Include="app.manifest" />
+    <None Include="lib\MvCameraControl.dll">
+      <Link>MvCameraControl.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup Condition=" '$(SimulationOnly)' == 'true' ">
     <Compile Include="Data\DatabaseService.Simulation.cs" />
@@ -161,6 +182,14 @@
     <PackageReference Include="System.Data.SQLite.Core">
       <Version>1.0.119</Version>
     </PackageReference>
+    <None Include="lib\x86\SQLite.Interop.dll">
+      <Link>x86\SQLite.Interop.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="lib\x64\SQLite.Interop.dll">
+      <Link>x64\SQLite.Interop.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

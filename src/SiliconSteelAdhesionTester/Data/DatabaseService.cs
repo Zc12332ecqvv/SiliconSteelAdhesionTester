@@ -17,7 +17,7 @@ namespace SiliconSteelAdhesionTester.Data
 
         public DatabaseService()
         {
-            string dataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
+            string dataDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data"));
             Directory.CreateDirectory(dataDir);
             DatabasePath = Path.Combine(dataDir, "AdhesionTester.db");
             string legacyDatabasePath = Path.Combine(dataDir, "Sorter.db");
@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS InspectionTasks(Id INTEGER PRIMARY KEY AUTOINCREMENT,
 CREATE TABLE IF NOT EXISTS ScanEvents(Id INTEGER PRIMARY KEY AUTOINCREMENT, QrCodeContent TEXT, MaterialType TEXT, Station TEXT, IsAccepted INTEGER NOT NULL, Message TEXT, OperatorName TEXT, CreatedAt TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS VisionResults(Id INTEGER PRIMARY KEY AUTOINCREMENT, QrCodeContent TEXT, TestType TEXT NOT NULL, LossRatePercent REAL NOT NULL, ParticleCount INTEGER NOT NULL, DefectPixelCount INTEGER NOT NULL, InspectionPixelCount INTEGER NOT NULL, IsQualified INTEGER NOT NULL, SourceImagePath TEXT, MaskImagePath TEXT, AnnotatedImagePath TEXT, OperatorName TEXT, CreatedAt TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS IX_VisionResults_CreatedAt ON VisionResults(CreatedAt);
+CREATE TABLE IF NOT EXISTS CaptureImages(Id INTEGER PRIMARY KEY AUTOINCREMENT, QrCodeContent TEXT, Station TEXT NOT NULL, CaptureStage TEXT NOT NULL, ImagePath TEXT NOT NULL, OperatorName TEXT, CreatedAt TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS IX_CaptureImages_QrCodeContent ON CaptureImages(QrCodeContent);
 CREATE TABLE IF NOT EXISTS SyncOutbox(Id INTEGER PRIMARY KEY AUTOINCREMENT, EntityType TEXT NOT NULL, EntityId INTEGER NOT NULL, Payload TEXT NOT NULL, Status TEXT NOT NULL DEFAULT 'Pending', RetryCount INTEGER NOT NULL DEFAULT 0, NextAttemptAt TEXT, LastError TEXT, CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS IX_SyncOutbox_Status ON SyncOutbox(Status,NextAttemptAt);
 PRAGMA user_version=1;";
@@ -140,6 +142,12 @@ VALUES('VisionResult',@id,@payload,'Pending',@now,@now)";
                 transaction.Commit();
                 return id;
             }
+        }
+
+        public void SaveCaptureImage(string qrCodeContent, string station, string captureStage, string imagePath, string userName)
+        {
+            Execute(@"INSERT INTO CaptureImages(QrCodeContent,Station,CaptureStage,ImagePath,OperatorName,CreatedAt)
+VALUES(@a,@b,@c,@d,@e,@f)", qrCodeContent, station, captureStage, imagePath, userName, DateTime.Now.ToString("s"));
         }
 
         public List<InspectionRecord> GetInspectionRecords(string keyword, int limit)

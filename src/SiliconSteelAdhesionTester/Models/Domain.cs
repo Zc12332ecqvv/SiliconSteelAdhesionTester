@@ -52,5 +52,8 @@ namespace SiliconSteelAdhesionTester.Models
         public string FlowMessage { get; set; }
         public bool S2ScanAllowed { get; set; }
         public bool S3ScanAllowed { get; set; }
+        public bool S2FirstPhotoAllowed { get; set; }
+        public bool S2SecondPhotoAllowed { get; set; }
+        public bool S4PhotoAllowed { get; set; }
     }
 }

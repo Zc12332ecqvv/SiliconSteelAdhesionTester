@@ -37,7 +37,7 @@ namespace SiliconSteelAdhesionTester.Forms
             btnOn.Click += async (s, e) => await ExecuteSafe(() => WriteValueAsync(true));
             btnOff.Click += async (s, e) => await ExecuteSafe(() => WriteValueAsync(false));
             btnS2Scan.Click += (s, e) => txtAddress.Text = PlcAddresses.S2ScanAllowed;
-            btnS2Camera.Click += (s, e) => txtAddress.Text = PlcAddresses.S2CameraAllowed;
+            btnS2Camera.Click += (s, e) => txtAddress.Text = PlcAddresses.S2SecondPhotoAllowed;
             btnS4Camera.Click += (s, e) => txtAddress.Text = PlcAddresses.S4CameraAllowed;
             _plc.SnapshotChanged += PlcSnapshotChanged;
             FormClosed += (s, e) => _plc.SnapshotChanged -= PlcSnapshotChanged;

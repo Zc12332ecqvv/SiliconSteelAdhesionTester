@@ -8,6 +8,7 @@ using SiliconSteelAdhesionTester.Data;
 using SiliconSteelAdhesionTester.Models;
 using SiliconSteelAdhesionTester.Services.Plc;
 using SiliconSteelAdhesionTester.Services.Scanner;
+using SiliconSteelAdhesionTester.Services.Vision;
 
 namespace SiliconSteelAdhesionTester.Forms
 {
@@ -36,6 +37,11 @@ namespace SiliconSteelAdhesionTester.Forms
         private bool _s3ScanResponseActive;
         private PlcSnapshot _latestSnapshot;
         private bool _resourcesDisposed;
+        private IQrCodeReader _tcpQrCodeReader;
+        private IImageAcquisitionService _imageAcquisition;
+        private IAdhesionVisionService _automaticVision;
+        private string _lastOrientedQrCode;
+        private string _lastNonOrientedQrCode;
 
         public MainForm()
         {
@@ -49,6 +55,11 @@ namespace SiliconSteelAdhesionTester.Forms
             _database = database ?? throw new ArgumentNullException(nameof(database));
             _plc = plc ?? throw new ArgumentNullException(nameof(plc));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _tcpQrCodeReader = new TcpQrCodeReader(_settings);
+            _imageAcquisition = string.Equals(_settings.CameraProvider, "MVS", StringComparison.OrdinalIgnoreCase)
+                ? (IImageAcquisitionService)new MvsImageAcquisitionService(_settings)
+                : new FolderImageAcquisitionService(_settings);
+            _automaticVision = new AdhesionVisionService(_settings);
             if (_settings.QrCodeScannerEnabled)
             {
                 _qrCodeScanner = new KeyboardQrCodeScanner(
@@ -296,6 +307,9 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             string type = oriented ? "取向" : "无取向";
             _lastScannedQrCode = qrCodeContent;
+            if (oriented) _lastOrientedQrCode = qrCodeContent;
+            else _lastNonOrientedQrCode = qrCodeContent;
+            EnqueueQrCode(qrCodeContent, oriented);
             lblQrCodeContent.Text = qrCodeContent;
             lblCurrentTask.Text = "当前检验号 · 二维码读取完成，正在通知PLC";
             lblMaterialType.Text = type + "硅钢片";
@@ -380,6 +394,7 @@ namespace SiliconSteelAdhesionTester.Forms
             lblHome.Text = IsAllHome(snapshot) ? "在原位" : "未回原位";
             lblHome.BackColor = IsAllHome(snapshot) ? Color.LimeGreen : Color.OrangeRed;
             UpdateScanPermission(snapshot);
+            UpdateAutomaticInteractions(snapshot);
             _automatic = snapshot.Automatic;
             UpdateFlow(snapshot);
             if (snapshot.Stations != null)

@@ -34,6 +34,13 @@ namespace SiliconSteelAdhesionTester.Forms
         private readonly NumericUpDown numDifference = NewNumber(0, 255);
         private readonly NumericUpDown numParticleArea = NewNumber(1, 1000000);
         private readonly TextBox txtVisionDirectory = NewText();
+        private readonly CheckBox chkAutomaticInteractions = new CheckBox { Text = "启用PLC自动设备交互", AutoSize = true };
+        private readonly TextBox txtCameraInputDirectory = NewText();
+        private readonly ComboBox cboCameraProvider = NewCombo();
+        private readonly TextBox txtOrientedCameraIp = NewText();
+        private readonly TextBox txtNonOrientedCameraIp = NewText();
+        private readonly NumericUpDown numCameraTimeout = NewNumber(500, 120000);
+        private readonly NumericUpDown numCameraStable = NewNumber(50, 10000);
         private readonly TextBox txtSiteName = NewText();
         private readonly TextBox txtDeviceName = NewText();
         private readonly TextBox txtDeviceCode = NewText();
@@ -138,6 +145,14 @@ namespace SiliconSteelAdhesionTester.Forms
             AddRow(table, "图像差异阈值", numDifference, "OpenCV 0～255");
             AddRow(table, "最小颗粒面积(px)", numParticleArea, "过滤微小噪点");
             AddRow(table, "图片保存目录", txtVisionDirectory, "可填写相对或绝对路径");
+            AddRow(table, "自动交互", chkAutomaticInteractions, "PLC允许后自动读二维码、取图、判定并返回结果");
+            cboCameraProvider.Items.AddRange(new object[] { "MVS海康相机", "文件夹落图" });
+            AddRow(table, "相机取图方式", cboCameraProvider, "正式运行选择MVS；无相机调试可选择文件夹落图");
+            AddRow(table, "有取向相机IP", txtOrientedCameraIp, "S2第一次、第二次拍照共用的MV-CT120R-9GC01-PRO");
+            AddRow(table, "无取向相机IP", txtNonOrientedCameraIp, "S4无取向拍照使用的MV-CT120R-9GC01-PRO");
+            AddRow(table, "相机落图目录", txtCameraInputDirectory, "仅文件夹落图模式使用");
+            AddRow(table, "相机取图超时(ms)", numCameraTimeout, "超时后第一次拍照不返回完成，判定拍照返回NG");
+            AddRow(table, "文件稳定时间(ms)", numCameraStable, "防止读取仍在写入的图片");
             page.Controls.Add(Wrap(table));
             return page;
         }
@@ -190,6 +205,13 @@ namespace SiliconSteelAdhesionTester.Forms
             numDifference.Value = Clamp(numDifference, _settings.VisionDifferenceThreshold);
             numParticleArea.Value = Clamp(numParticleArea, _settings.VisionMinimumParticleArea);
             txtVisionDirectory.Text = _settings.VisionOutputDirectory;
+            chkAutomaticInteractions.Checked = _settings.AutomaticDeviceInteractionsEnabled;
+            cboCameraProvider.SelectedIndex = string.Equals(_settings.CameraProvider, "MVS", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+            txtOrientedCameraIp.Text = string.IsNullOrWhiteSpace(_settings.OrientedCameraIp) ? _settings.CameraIp : _settings.OrientedCameraIp;
+            txtNonOrientedCameraIp.Text = string.IsNullOrWhiteSpace(_settings.NonOrientedCameraIp) ? _settings.CameraIp : _settings.NonOrientedCameraIp;
+            txtCameraInputDirectory.Text = _settings.CameraInputDirectory;
+            numCameraTimeout.Value = Clamp(numCameraTimeout, _settings.CameraCaptureTimeoutMs);
+            numCameraStable.Value = Clamp(numCameraStable, _settings.CameraFileStableMs);
             txtSiteName.Text = _settings.SiteName;
             txtDeviceName.Text = _settings.DeviceName;
             txtDeviceCode.Text = _settings.DeviceCode;
@@ -201,7 +223,11 @@ namespace SiliconSteelAdhesionTester.Forms
             string error;
             if (!ValidateIp(txtPlcIp.Text, "PLC IP", out error) ||
                 !ValidateIp(txtOrientedIp.Text, "取向二维码读取器IP", out error) ||
-                !ValidateIp(txtNonOrientedIp.Text, "无取向二维码读取器IP", out error))
+                !ValidateIp(txtNonOrientedIp.Text, "无取向二维码读取器IP", out error) ||
+                (!string.IsNullOrWhiteSpace(txtOrientedCameraIp.Text) &&
+                 !ValidateIp(txtOrientedCameraIp.Text, "有取向相机IP", out error)) ||
+                (!string.IsNullOrWhiteSpace(txtNonOrientedCameraIp.Text) &&
+                 !ValidateIp(txtNonOrientedCameraIp.Text, "无取向相机IP", out error)))
             {
                 MessageBox.Show(this, error, "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -214,7 +240,8 @@ namespace SiliconSteelAdhesionTester.Forms
                 MessageBox.Show(this, "LIMS接口地址必须是完整的HTTP或HTTPS地址。", "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            if (string.IsNullOrWhiteSpace(txtVisionDirectory.Text))
+            if (string.IsNullOrWhiteSpace(txtVisionDirectory.Text) ||
+                string.IsNullOrWhiteSpace(txtCameraInputDirectory.Text))
             {
                 MessageBox.Show(this, "图片保存目录不能为空。", "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -244,6 +271,13 @@ namespace SiliconSteelAdhesionTester.Forms
             _settings.VisionDifferenceThreshold = (int)numDifference.Value;
             _settings.VisionMinimumParticleArea = (int)numParticleArea.Value;
             _settings.VisionOutputDirectory = txtVisionDirectory.Text.Trim();
+            _settings.AutomaticDeviceInteractionsEnabled = chkAutomaticInteractions.Checked;
+            _settings.CameraProvider = cboCameraProvider.SelectedIndex == 0 ? "MVS" : "Folder";
+            _settings.OrientedCameraIp = txtOrientedCameraIp.Text.Trim();
+            _settings.NonOrientedCameraIp = txtNonOrientedCameraIp.Text.Trim();
+            _settings.CameraInputDirectory = txtCameraInputDirectory.Text.Trim();
+            _settings.CameraCaptureTimeoutMs = (int)numCameraTimeout.Value;
+            _settings.CameraFileStableMs = (int)numCameraStable.Value;
             _settings.SiteName = txtSiteName.Text.Trim();
             _settings.DeviceName = txtDeviceName.Text.Trim();
             _settings.DeviceCode = txtDeviceCode.Text.Trim();

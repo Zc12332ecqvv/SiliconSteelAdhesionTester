@@ -24,7 +24,7 @@ namespace SiliconSteelAdhesionTester.Data
 
         public void Initialize()
         {
-            _dataDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
+            _dataDirectory = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data"));
             Directory.CreateDirectory(_dataDirectory);
             string legacyLogPath = Path.Combine(_dataDirectory, "Sorter-Simulation.log");
             if (!File.Exists(DatabasePath) && File.Exists(legacyLogPath))
@@ -65,6 +65,11 @@ namespace SiliconSteelAdhesionTester.Data
             Append("VISION", userName, result.IsQualified ? "OK" : "NG", qrCodeContent,
                 result.TestType + " 脱落率=" + result.LossRatePercent.ToString("F3") + "% 颗粒=" + result.ParticleCount + " 图片=" + result.AnnotatedImagePath);
             return DateTime.Now.Ticks;
+        }
+
+        public void SaveCaptureImage(string qrCodeContent, string station, string captureStage, string imagePath, string userName)
+        {
+            Append("CAPTURE", userName, captureStage, station, qrCodeContent + " " + imagePath);
         }
 
         public List<InspectionRecord> GetInspectionRecords(string keyword, int limit) { return new List<InspectionRecord>(); }

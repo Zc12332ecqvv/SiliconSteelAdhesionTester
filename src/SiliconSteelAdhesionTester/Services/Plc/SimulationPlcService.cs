@@ -87,6 +87,9 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     FlowPaused = !_lineRunning || _linePaused,
                     S2ScanAllowed = GetBool(PlcAddresses.S2ScanAllowed),
                     S3ScanAllowed = GetBool(PlcAddresses.S3ScanAllowed),
+                    S2FirstPhotoAllowed = GetBool(PlcAddresses.S2FirstPhotoAllowed),
+                    S2SecondPhotoAllowed = GetBool(PlcAddresses.S2SecondPhotoAllowed),
+                    S4PhotoAllowed = GetBool(PlcAddresses.S4CameraAllowed),
                     FlowMessage = FlowDescription(_flowStep, _lineRunning, _linePaused)
                 });
                 await Task.Delay(_settings.PollIntervalMs, cancellationToken).ConfigureAwait(false);

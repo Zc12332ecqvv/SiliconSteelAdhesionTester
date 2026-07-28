@@ -27,14 +27,19 @@ namespace SiliconSteelAdhesionTester.Services.Plc
         public const string S2ScanDone = "DB4120.DBX576.3";
         public const string S2ScanOk = "DB4120.DBX576.4";
         public const string S2ScanNg = "DB4120.DBX576.5";
-        public const string S2CameraAllowed = "DB4120.DBX578.0";
-        public const string S2CameraDone = "DB4120.DBX576.0";
-        public const string S2CameraOk = "DB4120.DBX576.1";
-        public const string S2CameraNg = "DB4120.DBX576.2";
+        public const string S2FirstPhotoAllowed = "DB4120.DBX579.0";
+        public const string S2FirstPhotoDone = "DB4120.DBX577.0";
+        public const string S2SecondPhotoAllowed = "DB4120.DBX578.0";
+        public const string S2SecondPhotoDone = "DB4120.DBX576.0";
+        public const string S2SecondPhotoOk = "DB4120.DBX576.1";
+        public const string S2SecondPhotoNg = "DB4120.DBX576.2";
         public const string S3ScanAllowed = "DB4120.DBX844.3";
         public const string S3ScanDone = "DB4120.DBX842.3";
         public const string S3ScanOk = "DB4120.DBX842.4";
         public const string S3ScanNg = "DB4120.DBX842.5";
         public const string S4CameraAllowed = "DB4120.DBX1110.0";
+        public const string S4CameraDone = "DB4120.DBX1108.0";
+        public const string S4CameraOk = "DB4120.DBX1108.1";
+        public const string S4CameraNg = "DB4120.DBX1108.2";
     }
 }
