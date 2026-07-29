@@ -14,6 +14,7 @@ namespace SiliconSteelAdhesionTester.Forms
         private bool _s3ScanRequestRunning;
         private bool _s2FirstPhotoAttempted;
         private bool _s2FirstPhotoDoneActive;
+        private bool _s2SecondPhotoAttempted;
         private bool _s2SecondPhotoRequestRunning;
         private bool _s2SecondPhotoResponseActive;
         private bool _s4PhotoRequestRunning;
@@ -48,16 +49,23 @@ namespace SiliconSteelAdhesionTester.Forms
                 }
             }
 
-            if (snapshot.S2SecondPhotoAllowed && !_s2SecondPhotoResponseActive && !_s2SecondPhotoRequestRunning)
+            if (snapshot.S2SecondPhotoAllowed &&
+                !_s2SecondPhotoAttempted &&
+                !_s2SecondPhotoResponseActive &&
+                !_s2SecondPhotoRequestRunning)
                 _ = HandleS2SecondPhotoAsync();
-            if (!snapshot.S2SecondPhotoAllowed && _s2SecondPhotoResponseActive)
+            if (!snapshot.S2SecondPhotoAllowed)
             {
-                _s2SecondPhotoResponseActive = false;
-                _ = ResetResultResponseAsync(
-                    PlcAddresses.S2SecondPhotoDone,
-                    PlcAddresses.S2SecondPhotoOk,
-                    PlcAddresses.S2SecondPhotoNg,
-                    "S2第二次拍照");
+                _s2SecondPhotoAttempted = false;
+                if (_s2SecondPhotoResponseActive)
+                {
+                    _s2SecondPhotoResponseActive = false;
+                    _ = ResetResultResponseAsync(
+                        PlcAddresses.S2SecondPhotoDone,
+                        PlcAddresses.S2SecondPhotoOk,
+                        PlcAddresses.S2SecondPhotoNg,
+                        "S2第二次拍照");
+                }
             }
 
             if (snapshot.S4PhotoAllowed && !_s4PhotoResponseActive && !_s4PhotoRequestRunning)
@@ -161,6 +169,7 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private async Task HandleS2SecondPhotoAsync()
         {
+            _s2SecondPhotoAttempted = true;
             _s2SecondPhotoRequestRunning = true;
             try
             {
@@ -185,11 +194,17 @@ namespace SiliconSteelAdhesionTester.Forms
             }
             catch (OperationCanceledException) when (!_shutdown.IsCancellationRequested)
             {
-                await RejectPhotoAsync(true, "S2第二次拍照", "等待压弯后图片超时");
+                LogAutomationFault(
+                    "CAMERA_TIMEOUT",
+                    "S2第二次拍照",
+                    "等待压弯后图片超时；未返回完成/NG信号，等待故障复位");
             }
             catch (Exception ex)
             {
-                await RejectPhotoAsync(true, "S2第二次拍照", ex.Message);
+                LogAutomationFault(
+                    "CAMERA_SECOND",
+                    "S2第二次拍照",
+                    ex.Message + "；未返回完成/NG信号，等待故障复位");
             }
             finally { _s2SecondPhotoRequestRunning = false; }
         }
