@@ -4,13 +4,17 @@ namespace SiliconSteelAdhesionTester.Services.Plc
     public static class PlcAddresses
     {
         public const string LineRunningCondition = "DB4120.DBX36.0";
+        public const string S1AutomaticRunning = "DB4120.DBX36.1";
+        public const string S2HasPendingMaterial = "DB4120.DBX36.2";
+        public const string S3HasPendingMaterial = "DB4120.DBX36.3";
+        public const string S4HasMaterialForTape = "DB4120.DBX36.4";
         public const string AutoMode = "DB5120.DBX62.1";       // 表中注明“取反”
         public const string EmergencyStop = "DB5120.DBX62.3"; // 表中注明“取反”
         public const string ResetPulse = "DB5120.DBX62.4";
         public const string LineStart = "DB5120.DBX64.0";
         public const string LinePause = "DB5120.DBX68.0";
         public const string LineHome = "DB5120.DBX72.0";
-        public const string SimulationLineStop = "SIM.LINE.STOP";
+        public const string WholeLineHome = "DB5120.DBX150.0";
 
         public static string StationStart(int station) { return "DB5120.DBX64." + station; }
         public static string StationPause(int station) { return "DB5120.DBX68." + station; }

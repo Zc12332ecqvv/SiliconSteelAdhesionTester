@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -21,32 +22,36 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             pnlSamplePreview = new Panel
             {
-                BackColor = Color.FromArgb(243, 246, 250),
+                BackColor = Color.White,
                 BorderStyle = BorderStyle.FixedSingle
             };
             lblSamplePreviewTitle = new Label
             {
                 Dock = DockStyle.Top,
-                Height = 42,
+                Height = 38,
                 Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold),
-                Padding = new Padding(12, 10, 0, 0),
-                Text = "当前样品"
+                ForeColor = Color.FromArgb(27, 52, 76),
+                BackColor = Color.FromArgb(240, 245, 250),
+                Padding = new Padding(14, 8, 0, 0),
+                Text = "当前试样 · 长条图像预览"
             };
             lblSamplePreviewStatus = new Label
             {
                 Dock = DockStyle.Bottom,
-                Height = 34,
+                Height = 30,
                 ForeColor = Color.DimGray,
-                Padding = new Padding(12, 7, 8, 0),
+                BackColor = Color.FromArgb(248, 250, 252),
+                Padding = new Padding(14, 5, 8, 0),
                 AutoEllipsis = true,
                 Text = "等待任务"
             };
             picCurrentSample = new PictureBox
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(28, 36, 46),
+                BackColor = Color.FromArgb(24, 34, 45),
                 SizeMode = PictureBoxSizeMode.Zoom
             };
+            picCurrentSample.Paint += DrawSamplePlaceholder;
             pnlSamplePreview.Controls.Add(picCurrentSample);
             pnlSamplePreview.Controls.Add(lblSamplePreviewStatus);
             pnlSamplePreview.Controls.Add(lblSamplePreviewTitle);
@@ -63,29 +68,92 @@ namespace SiliconSteelAdhesionTester.Forms
             if (pnlSamplePreview == null || pnlStationHeader.ClientSize.Width <= 0) return;
 
             const int margin = 12;
-            const int gap = 14;
+            const int gap = 12;
             int availableWidth = pnlStationHeader.ClientSize.Width - margin * 2;
-            int previewWidth = Math.Max(300, Math.Min(520, (int)(availableWidth * 0.38)));
-            int rightLeft = margin + previewWidth + gap;
-            int rightWidth = Math.Max(300, pnlStationHeader.ClientSize.Width - rightLeft - margin);
             int availableHeight = Math.Max(160, pnlStationHeader.ClientSize.Height - margin * 2);
+            int previewHeight = Math.Max(150, Math.Min(230, (int)(availableHeight * 0.42)));
+            int lowerTop = margin + previewHeight + gap;
+            int lowerHeight = Math.Max(100, margin + availableHeight - lowerTop);
+            int queueWidth = Math.Max(300, (int)((availableWidth - gap) * 0.43));
+            int logLeft = margin + queueWidth + gap;
+            int logWidth = Math.Max(300, margin + availableWidth - logLeft);
 
-            pnlSamplePreview.Bounds = new Rectangle(margin, margin, previewWidth, availableHeight);
+            pnlSamplePreview.Bounds = new Rectangle(margin, margin, availableWidth, previewHeight);
 
             lblQueueTitle.Dock = DockStyle.None;
             dgvTasks.Dock = DockStyle.None;
             lblLogTitle.Dock = DockStyle.None;
             txtRuntimeLog.Dock = DockStyle.None;
 
-            int queueHeight = Math.Max(150, (availableHeight - lblQueueTitle.Height - lblLogTitle.Height) / 2);
-            lblQueueTitle.Bounds = new Rectangle(rightLeft, margin, rightWidth, lblQueueTitle.Height);
-            dgvTasks.Bounds = new Rectangle(rightLeft, lblQueueTitle.Bottom, rightWidth, queueHeight);
-            lblLogTitle.Bounds = new Rectangle(rightLeft, dgvTasks.Bottom, rightWidth, lblLogTitle.Height);
+            lblQueueTitle.Bounds = new Rectangle(margin, lowerTop, queueWidth, lblQueueTitle.Height);
+            dgvTasks.Bounds = new Rectangle(
+                margin,
+                lblQueueTitle.Bottom,
+                queueWidth,
+                Math.Max(40, lowerHeight - lblQueueTitle.Height));
+            lblLogTitle.Bounds = new Rectangle(logLeft, lowerTop, logWidth, lblLogTitle.Height);
             txtRuntimeLog.Bounds = new Rectangle(
-                rightLeft,
+                logLeft,
                 lblLogTitle.Bottom,
-                rightWidth,
-                Math.Max(40, margin + availableHeight - lblLogTitle.Bottom));
+                logWidth,
+                Math.Max(40, lowerHeight - lblLogTitle.Height));
+        }
+
+        private void DrawSamplePlaceholder(object sender, PaintEventArgs e)
+        {
+            if (picCurrentSample.Image != null) return;
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            int stripWidth = Math.Max(180, Math.Min(picCurrentSample.ClientSize.Width - 100, 820));
+            int stripHeight = Math.Max(34, Math.Min(68, stripWidth / 9));
+            Rectangle strip = new Rectangle(
+                (picCurrentSample.ClientSize.Width - stripWidth) / 2,
+                (picCurrentSample.ClientSize.Height - stripHeight) / 2 - 8,
+                stripWidth,
+                stripHeight);
+
+            using (GraphicsPath path = RoundedRectangle(strip, 8))
+            using (LinearGradientBrush brush = new LinearGradientBrush(
+                strip,
+                Color.FromArgb(175, 188, 200),
+                Color.FromArgb(104, 121, 137),
+                LinearGradientMode.Vertical))
+            using (Pen border = new Pen(Color.FromArgb(210, 220, 229), 1.5F))
+            {
+                e.Graphics.FillPath(brush, path);
+                e.Graphics.DrawPath(border, path);
+            }
+
+            string text = string.IsNullOrWhiteSpace(_previewSampleId)
+                ? "等待长条试样图像"
+                : "检验号 " + _previewSampleId + " · 等待图像";
+            using (Font font = new Font("Microsoft YaHei UI", 9F))
+            using (Brush textBrush = new SolidBrush(Color.FromArgb(190, 202, 213)))
+            {
+                SizeF size = e.Graphics.MeasureString(text, font);
+                e.Graphics.DrawString(
+                    text,
+                    font,
+                    textBrush,
+                    (picCurrentSample.ClientSize.Width - size.Width) / 2,
+                    strip.Bottom + 10);
+            }
+        }
+
+        private static GraphicsPath RoundedRectangle(Rectangle bounds, int radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            int diameter = radius * 2;
+            Rectangle arc = new Rectangle(bounds.X, bounds.Y, diameter, diameter);
+            path.AddArc(arc, 180, 90);
+            arc.X = bounds.Right - diameter;
+            path.AddArc(arc, 270, 90);
+            arc.Y = bounds.Bottom - diameter;
+            path.AddArc(arc, 0, 90);
+            arc.X = bounds.X;
+            path.AddArc(arc, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private void SetPreviewSample(string sampleId)
@@ -160,6 +228,7 @@ namespace SiliconSteelAdhesionTester.Forms
             Image old = picCurrentSample.Image;
             picCurrentSample.Image = image;
             old?.Dispose();
+            picCurrentSample.Invalidate();
         }
 
         private static bool IsSupportedImage(string path)

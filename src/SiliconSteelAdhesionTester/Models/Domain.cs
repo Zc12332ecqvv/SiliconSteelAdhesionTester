@@ -50,6 +50,11 @@ namespace SiliconSteelAdhesionTester.Models
         public bool FlowPaused { get; set; }
         public bool FlowFault { get; set; }
         public string FlowMessage { get; set; }
+        public bool WholeLineHome { get; set; }
+        public bool S1AutomaticRunning { get; set; }
+        public bool S2HasPendingMaterial { get; set; }
+        public bool S3HasPendingMaterial { get; set; }
+        public bool S4HasMaterialForTape { get; set; }
         public bool S2ScanAllowed { get; set; }
         public bool S3ScanAllowed { get; set; }
         public bool S2FirstPhotoAllowed { get; set; }

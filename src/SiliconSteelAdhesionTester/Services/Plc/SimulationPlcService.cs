@@ -61,6 +61,7 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                 }
 
                 StationSnapshot[] stations = new StationSnapshot[4];
+                bool wholeLineHome = true;
                 for (int i = 0; i < 4; i++)
                 {
                     stations[i] = new StationSnapshot
@@ -72,6 +73,7 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                         Running = _lineRunning && !_linePaused && _stationRunning[i],
                         Step = _steps[i]
                     };
+                    if (!stations[i].Home) wholeLineHome = false;
                 }
 
                 SnapshotChanged?.Invoke(this, new PlcSnapshot
@@ -85,6 +87,11 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     ShiftCount = _completedCount,
                     FlowStepIndex = _flowStep,
                     FlowPaused = !_lineRunning || _linePaused,
+                    WholeLineHome = wholeLineHome,
+                    S1AutomaticRunning = _lineRunning && !_linePaused && _stationRunning[0],
+                    S2HasPendingMaterial = GetBool(PlcAddresses.S2HasPendingMaterial),
+                    S3HasPendingMaterial = GetBool(PlcAddresses.S3HasPendingMaterial),
+                    S4HasMaterialForTape = GetBool(PlcAddresses.S4HasMaterialForTape),
                     S2ScanAllowed = GetBool(PlcAddresses.S2ScanAllowed),
                     S3ScanAllowed = GetBool(PlcAddresses.S3ScanAllowed),
                     S2FirstPhotoAllowed = GetBool(PlcAddresses.S2FirstPhotoAllowed),
@@ -116,7 +123,6 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                 for (int i = 0; i < 4; i++) _stationRunning[i] = true;
             }
             else if (address == PlcAddresses.LinePause) { _linePaused = true; }
-            else if (address == PlcAddresses.SimulationLineStop) { _lineRunning = false; _linePaused = false; for (int i = 0; i < 4; i++) _stationRunning[i] = false; }
             else if (address == PlcAddresses.LineHome && isOn) { for (int i = 0; i < 4; i++) _steps[i] = 0; _flowStep = 0; }
             else
             {

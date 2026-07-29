@@ -42,6 +42,9 @@ namespace SiliconSteelAdhesionTester.Forms
         private IAdhesionVisionService _automaticVision;
         private string _lastOrientedQrCode;
         private string _lastNonOrientedQrCode;
+        private bool? _currentMaterialOriented;
+        private string _manualTaskId;
+        private bool _homeSignalMismatchActive;
 
         public MainForm()
         {
@@ -101,7 +104,7 @@ namespace SiliconSteelAdhesionTester.Forms
             pnlStationHeader.Width = Math.Max(320, Math.Min(460, (int)(clientWidth * 0.24)));
             pnlOverview.Height = Math.Max(100, (int)(clientHeight * 0.115));
             pnlFlow.Height = Math.Max(100, (int)(clientHeight * 0.115));
-            pnlBottom.Height = Math.Max(76, (int)(clientHeight * 0.09));
+            pnlBottom.Height = Math.Max(104, (int)(clientHeight * 0.115));
             PerformLayout();
 
             int contentLeft = pnlNavigation.Right;
@@ -237,14 +240,20 @@ namespace SiliconSteelAdhesionTester.Forms
             btnRecords.Visible = false;
             btnFaultLogs.Visible = false;
 
-            Button[] commandButtons = new[] { btnManualMode, btnAutoMode, btnLineStart, btnLinePause, btnLineStop, btnLineHome, btnFaultReset };
-            int commandGap = 12;
+            Button[] commandButtons = new[] { btnManualMode, btnAutoMode, btnLineStart, btnLinePause, btnLineHome, btnFaultReset };
+            int commandGap = 10;
             int commandMargin = 20;
-            int commandWidth = Math.Max(86, (pnlBottom.ClientSize.Width - commandMargin * 2 - commandGap * 6) / 7);
-            int commandHeight = Math.Max(44, pnlBottom.ClientSize.Height - 24);
+            int commandWidth = Math.Max(96, (pnlBottom.ClientSize.Width - commandMargin * 2 - commandGap * 5) / 6);
+            int feedbackHeight = 30;
+            int commandAreaTop = feedbackHeight + 7;
+            int commandHeight = Math.Max(44, pnlBottom.ClientSize.Height - commandAreaTop - 10);
+            if (lblCommandFeedback != null)
+                lblCommandFeedback.Bounds = new Rectangle(0, 0, pnlBottom.ClientSize.Width, feedbackHeight);
             for (int i = 0; i < commandButtons.Length; i++)
             {
-                commandButtons[i].Location = new Point(commandMargin + i * (commandWidth + commandGap), (pnlBottom.ClientSize.Height - commandHeight) / 2);
+                commandButtons[i].Location = new Point(
+                    commandMargin + i * (commandWidth + commandGap),
+                    commandAreaTop + Math.Max(0, (pnlBottom.ClientSize.Height - commandAreaTop - commandHeight) / 2));
                 commandButtons[i].Size = new Size(commandWidth, commandHeight);
             }
 
@@ -306,6 +315,8 @@ namespace SiliconSteelAdhesionTester.Forms
         private void RegisterQrCode(string qrCodeContent, bool oriented)
         {
             string type = oriented ? "取向" : "无取向";
+            _currentMaterialOriented = oriented;
+            UpdateFlowPresentation();
             _lastScannedQrCode = qrCodeContent;
             if (oriented) _lastOrientedQrCode = qrCodeContent;
             else _lastNonOrientedQrCode = qrCodeContent;
@@ -391,11 +402,28 @@ namespace SiliconSteelAdhesionTester.Forms
             SetPreviewSample(currentQrCode);
             lblMode.Text = snapshot.Automatic ? "自动模式" : "手动模式";
             lblMode.BackColor = snapshot.Automatic ? Color.LimeGreen : Color.Gold;
-            lblHome.Text = IsAllHome(snapshot) ? "在原位" : "未回原位";
-            lblHome.BackColor = IsAllHome(snapshot) ? Color.LimeGreen : Color.OrangeRed;
+            bool stationHomes = AreAllStationHomes(snapshot);
+            bool homeSignalsAgree = snapshot.WholeLineHome == stationHomes;
+            lblHome.Text = homeSignalsAgree
+                ? (snapshot.WholeLineHome ? "在原位" : "未回原位")
+                : "零位信号不一致";
+            lblHome.BackColor = homeSignalsAgree
+                ? (snapshot.WholeLineHome ? Color.LimeGreen : Color.OrangeRed)
+                : Color.Gold;
+            if (!homeSignalsAgree && !_homeSignalMismatchActive)
+                AppendRuntimeLog("[PLC] 整机零位与四工位Home信号不一致，已禁止按“在原位”处理");
+            else if (homeSignalsAgree && _homeSignalMismatchActive)
+                AppendRuntimeLog("[PLC] 整机零位与四工位Home信号已恢复一致");
+            _homeSignalMismatchActive = !homeSignalsAgree;
             UpdateScanPermission(snapshot);
             UpdateAutomaticInteractions(snapshot);
             _automatic = snapshot.Automatic;
+            UpdateStartPauseButtonState(snapshot);
+            if (snapshot.S2ScanAllowed && !snapshot.S3ScanAllowed)
+                _currentMaterialOriented = true;
+            else if (snapshot.S3ScanAllowed && !snapshot.S2ScanAllowed)
+                _currentMaterialOriented = false;
+            UpdateFlowPresentation();
             UpdateFlow(snapshot);
             if (snapshot.Stations != null)
                 foreach (StationSnapshot station in snapshot.Stations) UpdateStation(station);
@@ -459,11 +487,45 @@ namespace SiliconSteelAdhesionTester.Forms
             lblFlowLegend.Text = snapshot.FlowFault ? "红色：故障" : snapshot.FlowPaused ? "黄色：暂停" : "绿色：完成  蓝色：执行中  白色：未执行";
         }
 
+        private void UpdateFlowPresentation()
+        {
+            if (_flowNodes == null || _flowNodes.Length != 8) return;
+
+            string[] captions;
+            if (_currentMaterialOriented == true)
+            {
+                captions = new[]
+                {
+                    "1 二维码取样", "2 压弯前拍照", "3 固定位置压弯", "4 压弯后拍照",
+                    "5 前后图像比对", "6 OpenCV分析", "7 脱落率判定", "8 保存上传"
+                };
+            }
+            else if (_currentMaterialOriented == false)
+            {
+                captions = new[]
+                {
+                    "1 二维码取样", "2 非取向压弯", "3 胶带粘取", "4 胶带拍照",
+                    "5 颗粒区域提取", "6 OpenCV分析", "7 颗粒结果判定", "8 保存上传"
+                };
+            }
+            else
+            {
+                captions = new[]
+                {
+                    "1 二维码取样", "2 检测准备", "3 试样处理", "4 图像采集",
+                    "5 图像比对", "6 OpenCV分析", "7 结果判定", "8 保存上传"
+                };
+            }
+
+            for (int i = 0; i < _flowNodes.Length; i++)
+                _flowNodes[i].Text = captions[i];
+        }
+
         private void UpdateStation(StationSnapshot snapshot)
         {
             int index = snapshot.Number - 1;
             _stationSteps[index].Text = snapshot.Step + " 步";
-            _stationStatuses[index].Text = StationDescription(snapshot.Number, snapshot);
+            _stationStatuses[index].Text = StationDescription(snapshot.Number, snapshot, _latestSnapshot);
             _runLamps[index].BackColor = snapshot.Running ? Color.LimeGreen : Color.White;
             _readyLamps[index].BackColor = snapshot.Ready ? Color.LimeGreen : Color.White;
             _doneLamps[index].BackColor = snapshot.Done ? Color.LimeGreen : Color.White;
@@ -473,23 +535,45 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private static bool IsAllHome(PlcSnapshot snapshot)
         {
+            return snapshot != null && snapshot.WholeLineHome && AreAllStationHomes(snapshot);
+        }
+
+        private static bool AreAllStationHomes(PlcSnapshot snapshot)
+        {
             if (snapshot.Stations == null || snapshot.Stations.Length == 0) return false;
             foreach (StationSnapshot station in snapshot.Stations) if (!station.Home) return false;
             return true;
         }
 
-        private static string StationDescription(int station, StationSnapshot snapshot)
+        private static string StationDescription(int station, StationSnapshot snapshot, PlcSnapshot lineSnapshot)
         {
-            if (!snapshot.Running && snapshot.Step == 0) return "工位已就绪，等待总控任务";
-            if (!snapshot.Running) return "流程已暂停，等待继续";
             if (snapshot.Done) return "本工序完成，等待流转";
             switch (station)
             {
-                case 1: return "RBT分配任务中……";
-                case 2: return "等待取向工位二维码读取/拍照";
-                case 3: return "无取向折弯流程运行中";
-                default: return "磁性能检测流程运行中";
+                case 1:
+                    if (lineSnapshot != null && lineSnapshot.S1AutomaticRunning)
+                        return lineSnapshot.Automatic
+                            ? "AGV送料完成，S1自动流程已接通"
+                            : "S1手动启动已接通";
+                    return lineSnapshot != null && lineSnapshot.Automatic
+                        ? "等待总控/AGV送料完成"
+                        : "等待手动任务启动";
+                case 2:
+                    return lineSnapshot != null && lineSnapshot.S2HasPendingMaterial
+                        ? (snapshot.Running ? "取向有料，正在执行二维码读取/拍照" : "取向待检工位有料")
+                        : "取向待检工位无料";
+                case 3:
+                    return lineSnapshot != null && lineSnapshot.S3HasPendingMaterial
+                        ? (snapshot.Running ? "无取向有料，弯折流程运行中" : "无取向弯折待检工位有料")
+                        : "无取向弯折待检工位无料";
+                case 4:
+                    return lineSnapshot != null && lineSnapshot.S4HasMaterialForTape
+                        ? (snapshot.Running ? "无取向检测有料，胶带流程运行中" : "无取向检测有料，可进入胶带粘取")
+                        : "无取向检测等待来料";
             }
+            if (!snapshot.Running && snapshot.Step == 0) return "工位已就绪，等待总控任务";
+            if (!snapshot.Running) return "流程已暂停，等待继续";
+            return "工位流程运行中……";
         }
 
         private void PlcCommunicationFault(object sender, string message)

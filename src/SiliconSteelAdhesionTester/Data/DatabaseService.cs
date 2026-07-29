@@ -102,6 +102,8 @@ VALUES(@a,'Manual','Pending',@b,@c,@d,COALESCE((SELECT CreatedAt FROM Inspection
                 taskNo, orientedCount, nonOrientedCount, userName, DateTime.Now.ToString("s"));
         }
 
+
+        //视觉检测结果入库
         public long SaveVisionResult(string qrCodeContent, string sourceImagePath, AdhesionVisionResult result, string userName)
         {
             if (result == null) throw new ArgumentNullException(nameof(result));

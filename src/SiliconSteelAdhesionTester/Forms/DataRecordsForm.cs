@@ -22,7 +22,7 @@ namespace SiliconSteelAdhesionTester.Forms
             Text = "检测数据与运行日志";
             StartPosition = FormStartPosition.CenterParent;
             MinimumSize = new Size(980, 620);
-            Size = new Size(1180, 720);
+            Size = new Size(1320, 760);
             Font = new Font("Microsoft YaHei UI", 9F);
 
             TabControl tabs = new TabControl { Dock = DockStyle.Fill };
@@ -32,11 +32,11 @@ namespace SiliconSteelAdhesionTester.Forms
             tabs.TabPages.Add(logPage);
             tabs.SelectedTab = showLogs ? logPage : inspectionPage;
 
-            FlowLayoutPanel tools = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8), WrapContents = false };
+            FlowLayoutPanel tools = NewToolBar();
             _keyword.Width = 260;
-            Button query = new Button { Text = "查询", Width = 82 };
-            Button openImage = new Button { Text = "打开结果图片", Width = 120 };
-            Button refreshLogs = new Button { Text = "刷新日志", Width = 92 };
+            Button query = NewToolButton("查询", 82);
+            Button openImage = NewToolButton("打开结果图片", 132);
+            Button refreshLogs = NewToolButton("刷新日志", 100);
             query.Click += (s, e) => LoadInspections();
             openImage.Click += (s, e) => OpenSelectedImage();
             refreshLogs.Click += (s, e) => LoadLogs();
@@ -44,7 +44,7 @@ namespace SiliconSteelAdhesionTester.Forms
             inspectionPage.Controls.Add(_inspections);
             inspectionPage.Controls.Add(tools);
 
-            FlowLayoutPanel logTools = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8) };
+            FlowLayoutPanel logTools = NewToolBar();
             logTools.Controls.Add(refreshLogs);
             logPage.Controls.Add(_logs);
             logPage.Controls.Add(logTools);
@@ -64,6 +64,15 @@ namespace SiliconSteelAdhesionTester.Forms
             Rename(_inspections, "ImagePath", "结果图片");
             Rename(_inspections, "OperatorName", "操作员");
             Rename(_inspections, "CreatedAt", "检测时间");
+            SetColumn(_inspections, "Id", 90);
+            SetColumn(_inspections, "QrCodeContent", 300);
+            SetColumn(_inspections, "MaterialType", 150);
+            SetColumn(_inspections, "LossRatePercent", 140);
+            SetColumn(_inspections, "ParticleCount", 115);
+            SetColumn(_inspections, "IsQualified", 95);
+            SetColumn(_inspections, "ImagePath", 420, true);
+            SetColumn(_inspections, "OperatorName", 140);
+            SetColumn(_inspections, "CreatedAt", 210);
         }
 
         private void LoadLogs()
@@ -75,6 +84,12 @@ namespace SiliconSteelAdhesionTester.Forms
             Rename(_logs, "Message", "内容");
             Rename(_logs, "UserName", "用户");
             Rename(_logs, "CreatedAt", "时间");
+            SetColumn(_logs, "Category", 100);
+            SetColumn(_logs, "CodeOrAction", 190);
+            SetColumn(_logs, "Node", 160);
+            SetColumn(_logs, "Message", 720, true);
+            SetColumn(_logs, "UserName", 140);
+            SetColumn(_logs, "CreatedAt", 210);
         }
 
         private void OpenSelectedImage()
@@ -97,11 +112,72 @@ namespace SiliconSteelAdhesionTester.Forms
                 ReadOnly = true,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
+                AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells,
+                RowHeadersVisible = false,
+                ColumnHeadersHeight = 54,
+                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
                 MultiSelect = false,
-                BackgroundColor = Color.White
+                BackgroundColor = Color.White,
+                BorderStyle = BorderStyle.None,
+                GridColor = Color.FromArgb(224, 230, 238),
+                ScrollBars = ScrollBars.Both,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Padding = new Padding(5, 4, 5, 4),
+                    SelectionBackColor = Color.FromArgb(218, 235, 252),
+                    SelectionForeColor = Color.FromArgb(30, 45, 60),
+                    WrapMode = DataGridViewTriState.False
+                },
+                ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+                {
+                    BackColor = Color.FromArgb(44, 68, 94),
+                    ForeColor = Color.White,
+                    Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
+                    Padding = new Padding(4),
+                    Alignment = DataGridViewContentAlignment.MiddleLeft,
+                    WrapMode = DataGridViewTriState.True
+                },
+                EnableHeadersVisualStyles = false
             };
+        }
+
+        private static FlowLayoutPanel NewToolBar()
+        {
+            return new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 56,
+                Padding = new Padding(12, 10, 12, 8),
+                WrapContents = false,
+                BackColor = Color.FromArgb(243, 246, 250)
+            };
+        }
+
+        private static Button NewToolButton(string text, int width)
+        {
+            return new Button
+            {
+                Text = text,
+                Width = width,
+                Height = 32,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(38, 112, 190),
+                ForeColor = Color.White,
+                Margin = new Padding(8, 0, 0, 0)
+            };
+        }
+
+        private static void SetColumn(DataGridView grid, string name, int width, bool wrap = false)
+        {
+            if (!grid.Columns.Contains(name)) return;
+            DataGridViewColumn column = grid.Columns[name];
+            column.Width = width;
+            column.MinimumWidth = Math.Min(width, 70);
+            column.DefaultCellStyle.WrapMode = wrap
+                ? DataGridViewTriState.True
+                : DataGridViewTriState.False;
         }
 
         private static void Rename(DataGridView grid, string name, string header)
