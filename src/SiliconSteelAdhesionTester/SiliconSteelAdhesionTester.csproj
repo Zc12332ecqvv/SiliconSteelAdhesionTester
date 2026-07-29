@@ -48,31 +48,31 @@
   <ItemGroup>
     <!-- 旧式 .NET Framework 项目需要显式编译引用；PackageReference 负责还原和运行时资产。 -->
     <Reference Include="OpenCvSharp">
-      <HintPath>lib\OpenCvSharp.dll</HintPath>
+      <HintPath>$(MSBuildProjectDirectory)\lib\OpenCvSharp.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="MvCameraControl.Net">
-      <HintPath>lib\MvCameraControl.Net.dll</HintPath>
+      <HintPath>$(MSBuildProjectDirectory)\lib\MvCameraControl.Net.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Buffers">
-      <HintPath>lib\System.Buffers.dll</HintPath>
+      <HintPath>$(MSBuildProjectDirectory)\lib\System.Buffers.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Memory">
-      <HintPath>lib\System.Memory.dll</HintPath>
+      <HintPath>$(MSBuildProjectDirectory)\lib\System.Memory.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Numerics.Vectors">
-      <HintPath>lib\System.Numerics.Vectors.dll</HintPath>
+      <HintPath>$(MSBuildProjectDirectory)\lib\System.Numerics.Vectors.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Runtime.CompilerServices.Unsafe">
-      <HintPath>lib\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+      <HintPath>$(MSBuildProjectDirectory)\lib\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.ValueTuple">
-      <HintPath>lib\System.ValueTuple.dll</HintPath>
+      <HintPath>$(MSBuildProjectDirectory)\lib\System.ValueTuple.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <PackageReference Include="OpenCvSharp4">
@@ -158,8 +158,8 @@
     <None Include="App.config" />
     <None Include="app.manifest" />
     <None Include="lib\MvCameraControl.dll">
-      <Link>MvCameraControl.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>MvCameraControl.dll</TargetPath>
     </None>
   </ItemGroup>
   <ItemGroup Condition=" '$(SimulationOnly)' == 'true' ">
@@ -169,11 +169,11 @@
     <Compile Include="Data\DatabaseService.cs" />
     <Compile Include="Services\Plc\S7PlcService.cs" />
     <Reference Include="S7.Net">
-      <HintPath>lib\S7.Net.dll</HintPath>
+      <HintPath>$(MSBuildProjectDirectory)\lib\S7.Net.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="System.Data.SQLite">
-      <HintPath>lib\System.Data.SQLite.dll</HintPath>
+      <HintPath>$(MSBuildProjectDirectory)\lib\System.Data.SQLite.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <PackageReference Include="S7netplus">
@@ -183,12 +183,12 @@
       <Version>1.0.119</Version>
     </PackageReference>
     <None Include="lib\x86\SQLite.Interop.dll">
-      <Link>x86\SQLite.Interop.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>x86\SQLite.Interop.dll</TargetPath>
     </None>
     <None Include="lib\x64\SQLite.Interop.dll">
-      <Link>x64\SQLite.Interop.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>x64\SQLite.Interop.dll</TargetPath>
     </None>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

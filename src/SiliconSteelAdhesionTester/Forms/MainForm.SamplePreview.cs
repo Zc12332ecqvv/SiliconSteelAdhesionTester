@@ -48,8 +48,9 @@ namespace SiliconSteelAdhesionTester.Forms
             picCurrentSample = new PictureBox
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(24, 34, 45),
-                SizeMode = PictureBoxSizeMode.Zoom
+                BackColor = Color.FromArgb(225, 229, 234),
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                Margin = Padding.Empty
             };
             picCurrentSample.Paint += DrawSamplePlaceholder;
             pnlSamplePreview.Controls.Add(picCurrentSample);
@@ -103,57 +104,71 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             if (picCurrentSample.Image != null) return;
 
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            int stripWidth = Math.Max(180, Math.Min(picCurrentSample.ClientSize.Width - 100, 820));
-            int stripHeight = Math.Max(34, Math.Min(68, stripWidth / 9));
-            Rectangle strip = new Rectangle(
-                (picCurrentSample.ClientSize.Width - stripWidth) / 2,
-                (picCurrentSample.ClientSize.Height - stripHeight) / 2 - 8,
-                stripWidth,
-                stripHeight);
-
-            using (GraphicsPath path = RoundedRectangle(strip, 8))
-            using (LinearGradientBrush brush = new LinearGradientBrush(
-                strip,
-                Color.FromArgb(175, 188, 200),
-                Color.FromArgb(104, 121, 137),
-                LinearGradientMode.Vertical))
-            using (Pen border = new Pen(Color.FromArgb(210, 220, 229), 1.5F))
+            e.Graphics.SmoothingMode = SmoothingMode.HighQuality;
+            Rectangle canvas = new Rectangle(
+                4,
+                4,
+                Math.Max(1, picCurrentSample.ClientSize.Width - 8),
+                Math.Max(1, picCurrentSample.ClientSize.Height - 8));
+            using (Brush background = new SolidBrush(Color.FromArgb(235, 238, 242)))
+            using (Pen border = new Pen(Color.FromArgb(145, 154, 164)))
             {
-                e.Graphics.FillPath(brush, path);
-                e.Graphics.DrawPath(border, path);
+                e.Graphics.FillRectangle(background, canvas);
+                e.Graphics.DrawRectangle(border, canvas);
+            }
+
+            int top = canvas.Top + 6;
+            int availableHeight = Math.Max(36, canvas.Height - 12);
+            int gap = Math.Max(3, availableHeight / 18);
+            int stripHeight = Math.Max(10, (availableHeight - gap * 2) / 3);
+            Color[] stripColors =
+            {
+                Color.FromArgb(104, 113, 121),
+                Color.FromArgb(145, 153, 158),
+                Color.FromArgb(38, 43, 50)
+            };
+            for (int row = 0; row < stripColors.Length; row++)
+            {
+                Rectangle strip = new Rectangle(
+                    canvas.Left + 3,
+                    top + row * (stripHeight + gap),
+                    Math.Max(1, canvas.Width - 6),
+                    stripHeight);
+                using (LinearGradientBrush brush = new LinearGradientBrush(
+                    strip,
+                    ControlPaint.Light(stripColors[row], 0.08F),
+                    ControlPaint.Dark(stripColors[row], 0.08F),
+                    LinearGradientMode.Vertical))
+                {
+                    e.Graphics.FillRectangle(brush, strip);
+                }
+
+                if (row == 0)
+                {
+                    using (Pen marker = new Pen(Color.FromArgb(225, 61, 64), Math.Max(2, stripHeight / 10F)))
+                    {
+                        for (int segment = 1; segment <= 6; segment++)
+                        {
+                            int x = strip.Left + strip.Width * segment / 7;
+                            e.Graphics.DrawLine(marker, x, strip.Top + 2, x, strip.Bottom - 2);
+                        }
+                    }
+                }
             }
 
             string text = string.IsNullOrWhiteSpace(_previewSampleId)
-                ? "等待长条试样图像"
+                ? "等待试样检测图像"
                 : "检验号 " + _previewSampleId + " · 等待图像";
-            using (Font font = new Font("Microsoft YaHei UI", 9F))
-            using (Brush textBrush = new SolidBrush(Color.FromArgb(190, 202, 213)))
+            using (Font font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold))
+            using (Brush shadow = new SolidBrush(Color.FromArgb(185, 0, 0, 0)))
+            using (Brush textBrush = new SolidBrush(Color.White))
             {
                 SizeF size = e.Graphics.MeasureString(text, font);
-                e.Graphics.DrawString(
-                    text,
-                    font,
-                    textBrush,
-                    (picCurrentSample.ClientSize.Width - size.Width) / 2,
-                    strip.Bottom + 10);
+                float x = canvas.Left + 12;
+                float y = canvas.Bottom - size.Height - 8;
+                e.Graphics.DrawString(text, font, shadow, x + 1, y + 1);
+                e.Graphics.DrawString(text, font, textBrush, x, y);
             }
-        }
-
-        private static GraphicsPath RoundedRectangle(Rectangle bounds, int radius)
-        {
-            GraphicsPath path = new GraphicsPath();
-            int diameter = radius * 2;
-            Rectangle arc = new Rectangle(bounds.X, bounds.Y, diameter, diameter);
-            path.AddArc(arc, 180, 90);
-            arc.X = bounds.Right - diameter;
-            path.AddArc(arc, 270, 90);
-            arc.Y = bounds.Bottom - diameter;
-            path.AddArc(arc, 0, 90);
-            arc.X = bounds.X;
-            path.AddArc(arc, 90, 90);
-            path.CloseFigure();
-            return path;
         }
 
         private void SetPreviewSample(string sampleId)
