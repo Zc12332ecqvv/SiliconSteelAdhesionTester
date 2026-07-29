@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using SiliconSteelAdhesionTester.Models;
 using SiliconSteelAdhesionTester.Services.Plc;
@@ -19,6 +20,7 @@ namespace SiliconSteelAdhesionTester.Forms
         private bool _s2SecondPhotoResponseActive;
         private bool _s4PhotoRequestRunning;
         private bool _s4PhotoResponseActive;
+        private bool _debugS2SimulationRunning;
         private string _orientedBeforeImagePath;
         private readonly Dictionary<string, DateTime> _recentAutomaticQrCodes =
             new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
@@ -28,8 +30,10 @@ namespace SiliconSteelAdhesionTester.Forms
         private void UpdateAutomaticInteractions(PlcSnapshot snapshot)
         {
             if (!_settings.AutomaticDeviceInteractionsEnabled) return;
+            if (_debugS2SimulationRunning) return;
 
-            if (_settings.QrCodeScannerEnabled)
+            // 仿真模式由调试页显式录入二维码，禁止误连现场SR-1000。
+            if (_settings.QrCodeScannerEnabled && !_settings.Simulation)
             {
                 if (snapshot.S2ScanAllowed && !_s2ScanResponseActive && !_s2ScanRequestRunning)
                     _ = HandleAutomaticQrCodeAsync(true);
@@ -240,6 +244,124 @@ namespace SiliconSteelAdhesionTester.Forms
                 await RejectPhotoAsync(false, "S4拍照", ex.Message);
             }
             finally { _s4PhotoRequestRunning = false; }
+        }
+
+        internal async Task<AdhesionVisionResult> RunS2VisionSimulationAsync(
+            string qrCodeContent,
+            string beforeImagePath,
+            string afterImagePath)
+        {
+            if (!_settings.Simulation)
+                throw new InvalidOperationException("一键视觉流程只允许在PLC仿真模式下运行。");
+            if (_debugS2SimulationRunning)
+                throw new InvalidOperationException("S2视觉仿真正在运行，请等待本轮结束。");
+            if (string.IsNullOrWhiteSpace(qrCodeContent))
+                throw new ArgumentException("请输入测试二维码。", nameof(qrCodeContent));
+            if (!File.Exists(beforeImagePath))
+                throw new FileNotFoundException("压弯前图片不存在。", beforeImagePath);
+            if (!File.Exists(afterImagePath))
+                throw new FileNotFoundException("压弯后图片不存在。", afterImagePath);
+
+            _debugS2SimulationRunning = true;
+            qrCodeContent = qrCodeContent.Trim();
+            _orientedQrCodeQueue.Clear();
+            _s2ScanResponseActive = false;
+            _s2FirstPhotoAttempted = false;
+            _s2FirstPhotoDoneActive = false;
+            _s2SecondPhotoAttempted = false;
+            _s2SecondPhotoResponseActive = false;
+
+            try
+            {
+                AppendRuntimeLog("[SIM] 开始S2视觉全流程，二维码：" + qrCodeContent);
+
+                await _plc.WriteAsync(PlcAddresses.S2ScanAllowed, true, _shutdown.Token);
+                RegisterQrCode(qrCodeContent, true);
+                await SendScanResponseAsync(true, true);
+                AppendRuntimeLog("[SIM] S2扫码完成，进入第一次拍照");
+                await Task.Delay(250, _shutdown.Token);
+                await _plc.WriteAsync(PlcAddresses.S2ScanAllowed, false, _shutdown.Token);
+                await ResetScanResponseAsync(true);
+                _s2ScanResponseActive = false;
+
+                await _plc.WriteAsync(PlcAddresses.S2FirstPhotoAllowed, true, _shutdown.Token);
+                _database.SaveCaptureImage(
+                    qrCodeContent,
+                    "S2",
+                    CaptureStage.OrientedBefore.ToString(),
+                    beforeImagePath,
+                    _user.UserName);
+                await _plc.WriteAsync(PlcAddresses.S2FirstPhotoDone, true, _shutdown.Token);
+                AppendRuntimeLog("[SIM] S2第一次拍照完成：" + Path.GetFileName(beforeImagePath));
+                await Task.Delay(250, _shutdown.Token);
+                await _plc.WriteAsync(PlcAddresses.S2FirstPhotoAllowed, false, _shutdown.Token);
+                await _plc.WriteAsync(PlcAddresses.S2FirstPhotoDone, false, _shutdown.Token);
+
+                await _plc.WriteAsync(PlcAddresses.S2SecondPhotoAllowed, true, _shutdown.Token);
+                _database.SaveCaptureImage(
+                    qrCodeContent,
+                    "S2",
+                    CaptureStage.OrientedAfter.ToString(),
+                    afterImagePath,
+                    _user.UserName);
+                AppendRuntimeLog("[SIM] S2第二次拍照完成，开始视觉分析：" + Path.GetFileName(afterImagePath));
+
+                AdhesionVisionResult result = await Task.Run(() =>
+                    _automaticVision.AnalyzeOriented(
+                        beforeImagePath,
+                        afterImagePath,
+                        null,
+                        qrCodeContent));
+                _database.SaveVisionResult(qrCodeContent, afterImagePath, result, _user.UserName);
+                SetPreviewSample(qrCodeContent);
+                await SendResultResponseAsync(
+                    PlcAddresses.S2SecondPhotoDone,
+                    PlcAddresses.S2SecondPhotoOk,
+                    PlcAddresses.S2SecondPhotoNg,
+                    result.IsQualified,
+                    "S2第二次拍照");
+                AppendRuntimeLog("[SIM][VISION] S2 " + result.Message);
+                await Task.Delay(600, _shutdown.Token);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                LogAutomationFault("SIM_S2_VISION", "S2视觉仿真", ex.Message);
+                throw;
+            }
+            finally
+            {
+                await ResetS2SimulationSignalsAsync();
+                _orientedQrCodeQueue.Clear();
+                _s2ScanResponseActive = false;
+                _s2FirstPhotoAttempted = false;
+                _s2FirstPhotoDoneActive = false;
+                _s2SecondPhotoAttempted = false;
+                _s2SecondPhotoResponseActive = false;
+                _debugS2SimulationRunning = false;
+            }
+        }
+
+        private async Task ResetS2SimulationSignalsAsync()
+        {
+            string[] addresses =
+            {
+                PlcAddresses.S2ScanAllowed,
+                PlcAddresses.S2ScanDone,
+                PlcAddresses.S2ScanOk,
+                PlcAddresses.S2ScanNg,
+                PlcAddresses.S2FirstPhotoAllowed,
+                PlcAddresses.S2FirstPhotoDone,
+                PlcAddresses.S2SecondPhotoAllowed,
+                PlcAddresses.S2SecondPhotoDone,
+                PlcAddresses.S2SecondPhotoOk,
+                PlcAddresses.S2SecondPhotoNg
+            };
+            foreach (string address in addresses)
+            {
+                try { await _plc.WriteAsync(address, false, CancellationToken.None); }
+                catch (Exception ex) { AppendRuntimeLog("[SIM] 复位S2仿真信号失败：" + address + "，" + ex.Message); }
+            }
         }
 
         private async Task RejectPhotoAsync(bool s2, string node, string message)

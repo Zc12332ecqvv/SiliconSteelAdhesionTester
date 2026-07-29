@@ -13,6 +13,7 @@ namespace SiliconSteelAdhesionTester.Forms
     {
         private Label lblCommandFeedback;
         private ToolTip commandToolTip;
+        private bool _pauseCommandIssued;
 
         private void InitializeRuntimeBindings()
         {
@@ -69,7 +70,13 @@ namespace SiliconSteelAdhesionTester.Forms
 
             btnVision.Click += (s, e) => OpenVisionWindow();
             btnNavVision.Click += (s, e) => OpenVisionWindow();
-            btnDebug.Click += (s, e) => new DebugForm(_plc, _user, _shutdown.Token).Show(this);
+            btnDebug.Click += (s, e) =>
+                new DebugForm(
+                    _plc,
+                    _user,
+                    _settings,
+                    RunS2VisionSimulationAsync,
+                    _shutdown.Token).Show(this);
             btnRecords.Click += (s, e) => new DataRecordsForm(_database, false).Show(this);
             btnFaultLogs.Click += (s, e) => new DataRecordsForm(_database, true).Show(this);
             btnNavRecords.Click += (s, e) => new DataRecordsForm(_database, false).Show(this);
@@ -177,7 +184,8 @@ namespace SiliconSteelAdhesionTester.Forms
                 return;
             }
 
-            string action = !_latestSnapshot.FlowPaused
+            bool resumePausedFlow = _pauseCommandIssued;
+            string action = resumePausedFlow
                 ? "继续当前流程"
                 : manualMode
                     ? "执行手动任务 " + _manualTaskId
@@ -202,14 +210,19 @@ namespace SiliconSteelAdhesionTester.Forms
             bool sent = await ExecuteButtonAsync(
                 btnLineStart,
                 () => _plc.PulseAsync(
-                    manualMode ? PlcAddresses.StationStart(1) : PlcAddresses.LineStart,
+                    resumePausedFlow || !manualMode
+                        ? PlcAddresses.LineStart
+                        : PlcAddresses.StationStart(1),
                     _shutdown.Token),
                 "启动",
-                manualMode
+                resumePausedFlow
+                    ? "整机继续运行脉冲已发送，请观察流程恢复状态"
+                    : manualMode
                     ? "S1手动启动脉冲已发送，请观察取放料机构状态"
                     : "整机启动脉冲已发送，等待总控/AGV任务");
             if (sent)
             {
+                _pauseCommandIssued = false;
                 SetStartPauseVisualState(false, true);
                 if (manualMode)
                 {
@@ -235,6 +248,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 "暂停指令已发送，请等待设备在PLC定义的安全位置停下");
             if (sent)
             {
+                _pauseCommandIssued = true;
                 SetStartPauseVisualState(true, true);
                 if (!_latestSnapshot.Automatic && !string.IsNullOrWhiteSpace(_manualTaskId))
                     UpdateManualTaskRow("已暂停，等待启动");
