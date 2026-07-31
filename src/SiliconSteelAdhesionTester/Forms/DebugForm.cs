@@ -39,6 +39,20 @@ namespace SiliconSteelAdhesionTester.Forms
         private readonly PictureBox _picResultPreview = new PictureBox();
         private TabControl _tabs;
 
+        private sealed class PlcSignalShortcut
+        {
+            public PlcSignalShortcut(string name, string address, bool pulse = false)
+            {
+                Name = name;
+                Address = address;
+                Pulse = pulse;
+            }
+
+            public string Name { get; private set; }
+            public string Address { get; private set; }
+            public bool Pulse { get; private set; }
+        }
+
         public DebugForm()
         {
             InitializeComponent();
@@ -64,8 +78,6 @@ namespace SiliconSteelAdhesionTester.Forms
             btnRead.Click += async (s, e) => await ExecuteSafe(ReadValueAsync);
             btnOn.Click += async (s, e) => await ExecuteSafe(() => WriteValueAsync(true));
             btnOff.Click += async (s, e) => await ExecuteSafe(() => WriteValueAsync(false));
-            _plc.SnapshotChanged += PlcSnapshotChanged;
-            FormClosed += (s, e) => _plc.SnapshotChanged -= PlcSnapshotChanged;
         }
 
         private void ConfigureRuntimeUi(UserSession user)
@@ -73,7 +85,7 @@ namespace SiliconSteelAdhesionTester.Forms
             SuspendLayout();
             Controls.Clear();
             AutoScroll = false;
-            MinimumSize = new Size(1080, 720);
+            MinimumSize = new Size(1280, 760);
             WindowState = FormWindowState.Maximized;
             BackColor = Color.FromArgb(240, 244, 248);
 
@@ -85,8 +97,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 Padding = new Point(22, 8)
             };
             _tabs.TabPages.Add(BuildVisionSimulationPage());
-            _tabs.TabPages.Add(BuildStationPage());
-            _tabs.TabPages.Add(BuildRegisterPage());
+            _tabs.TabPages.Add(BuildSignalControlPage());
             Controls.Add(_tabs);
             Controls.Add(pnlHeader);
             ResumeLayout(true);
@@ -96,8 +107,8 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             pnlHeader.Controls.Clear();
             pnlHeader.Dock = DockStyle.Top;
-            pnlHeader.Height = 88;
-            pnlHeader.Padding = new Padding(30, 14, 24, 12);
+            pnlHeader.Height = 126;
+            pnlHeader.Padding = new Padding(30, 14, 24, 18);
             pnlHeader.BackColor = Color.FromArgb(25, 48, 72);
 
             Label title = new Label
@@ -113,15 +124,15 @@ namespace SiliconSteelAdhesionTester.Forms
                 AutoSize = true,
                 Font = new Font("Microsoft YaHei UI", 9.5F),
                 ForeColor = Color.FromArgb(190, 210, 229),
-                Location = new Point(33, 54),
-                Text = "视觉流程仿真、工位状态和PLC寄存器工具"
+                Location = new Point(33, 72),
+                Text = "视觉流程仿真与PLC自动流程信号调试"
             };
             Label identity = new Label
             {
                 AutoSize = false,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
                 Size = new Size(400, 34),
-                Location = new Point(Math.Max(640, ClientSize.Width - 430), 27),
+                Location = new Point(Math.Max(640, ClientSize.Width - 430), 40),
                 TextAlign = ContentAlignment.MiddleRight,
                 ForeColor = Color.White,
                 Text = (_settings.Simulation ? "● PLC仿真模式" : "⚠ 实体PLC模式") + "  |  " + user.DisplayName
@@ -144,7 +155,7 @@ namespace SiliconSteelAdhesionTester.Forms
             };
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 218));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 94));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
             _lblModeNotice.Dock = DockStyle.Fill;
@@ -172,7 +183,7 @@ namespace SiliconSteelAdhesionTester.Forms
             };
             form.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
             form.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            form.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+            form.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
             for (int row = 0; row < 3; row++) form.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333F));
 
             _txtSimulationQr.Text = "SIM-S2-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
@@ -187,22 +198,22 @@ namespace SiliconSteelAdhesionTester.Forms
 
             Panel actions = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 14, 0, 10) };
             _btnGenerateDemoImages.Text = "▣  生成示例图片";
-            _btnGenerateDemoImages.Size = new Size(180, 50);
+            _btnGenerateDemoImages.Size = new Size(220, 54);
             _btnGenerateDemoImages.Location = new Point(0, 14);
             StyleActionButton(_btnGenerateDemoImages, Color.FromArgb(82, 103, 126));
             _btnGenerateDemoImages.Click += (s, e) => GenerateDemoImages();
             _btnRunS2Simulation.Text = "▶  一键执行S2视觉流程";
-            _btnRunS2Simulation.Size = new Size(260, 50);
-            _btnRunS2Simulation.Location = new Point(194, 14);
+            _btnRunS2Simulation.Size = new Size(310, 54);
+            _btnRunS2Simulation.Location = new Point(236, 14);
             StyleActionButton(_btnRunS2Simulation, Color.FromArgb(35, 112, 190));
             _btnRunS2Simulation.Enabled = _settings.Simulation;
             _btnRunS2Simulation.Click += async (s, e) => await RunS2SimulationAsync();
             _simulationProgress.Size = new Size(260, 10);
-            _simulationProgress.Location = new Point(470, 34);
+            _simulationProgress.Location = new Point(562, 36);
             _simulationProgress.Style = ProgressBarStyle.Marquee;
             _simulationProgress.Visible = false;
             _lblSimulationResult.AutoSize = false;
-            _lblSimulationResult.Location = new Point(750, 14);
+            _lblSimulationResult.Location = new Point(838, 14);
             _lblSimulationResult.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _lblSimulationResult.Size = new Size(440, 50);
             _lblSimulationResult.TextAlign = ContentAlignment.MiddleLeft;
@@ -312,19 +323,297 @@ namespace SiliconSteelAdhesionTester.Forms
             return page;
         }
 
+        private TabPage BuildSignalControlPage()
+        {
+            TabPage page = NewTabPage("PLC流程信号调试");
+            TableLayoutPanel layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(22, 16, 22, 20),
+                ColumnCount = 1,
+                RowCount = 3
+            };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));
+
+            Label warning = new Label
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(18, 0, 18, 0),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold),
+                BackColor = _settings.Simulation ? Color.FromArgb(231, 239, 247) : Color.FromArgb(255, 235, 235),
+                ForeColor = _settings.Simulation ? Color.FromArgb(35, 83, 125) : Color.Firebrick,
+                Text = _settings.Simulation
+                    ? "PLC信号驱动仿真：按流程置位“允许/到料”，观察主界面是否进入下一步；测试后请及时复位。"
+                    : "实体PLC模式：下方按钮会直接读写PLC并可能触发设备动作，操作前必须确认现场安全。"
+            };
+            layout.Controls.Add(warning, 0, 0);
+
+            TabControl signalTabs = new TabControl
+            {
+                Dock = DockStyle.Fill,
+                Font = new Font("Microsoft YaHei UI", 10F),
+                Padding = new Point(18, 6)
+            };
+            signalTabs.TabPages.Add(BuildSignalCategory("流程条件", new[]
+            {
+                new PlcSignalShortcut("整机自动运行条件", PlcAddresses.LineRunningCondition),
+                new PlcSignalShortcut("上料工位自动运行", PlcAddresses.S1AutomaticRunning),
+                new PlcSignalShortcut("取向待检测工位有料", PlcAddresses.S2HasPendingMaterial),
+                new PlcSignalShortcut("无取向弯折工位有料", PlcAddresses.S3HasPendingMaterial),
+                new PlcSignalShortcut("无取向样品到达检测工位", PlcAddresses.S4HasMaterialForTape),
+                new PlcSignalShortcut("整机在零位（只读状态）", PlcAddresses.WholeLineHome)
+            }));
+            signalTabs.TabPages.Add(BuildSignalCategory("取向检测", new[]
+            {
+                new PlcSignalShortcut("允许读取二维码", PlcAddresses.S2ScanAllowed),
+                new PlcSignalShortcut("二维码读取完成", PlcAddresses.S2ScanDone),
+                new PlcSignalShortcut("二维码读取成功", PlcAddresses.S2ScanOk),
+                new PlcSignalShortcut("二维码读取失败", PlcAddresses.S2ScanNg),
+                new PlcSignalShortcut("允许压弯前拍照", PlcAddresses.S2FirstPhotoAllowed),
+                new PlcSignalShortcut("压弯前拍照完成", PlcAddresses.S2FirstPhotoDone),
+                new PlcSignalShortcut("允许压弯后拍照", PlcAddresses.S2SecondPhotoAllowed),
+                new PlcSignalShortcut("压弯后拍照完成", PlcAddresses.S2SecondPhotoDone),
+                new PlcSignalShortcut("压弯后检测合格", PlcAddresses.S2SecondPhotoOk),
+                new PlcSignalShortcut("压弯后检测不合格", PlcAddresses.S2SecondPhotoNg)
+            }));
+            signalTabs.TabPages.Add(BuildSignalCategory("无取向检测", new[]
+            {
+                new PlcSignalShortcut("允许读取二维码", PlcAddresses.S3ScanAllowed),
+                new PlcSignalShortcut("二维码读取完成", PlcAddresses.S3ScanDone),
+                new PlcSignalShortcut("二维码读取成功", PlcAddresses.S3ScanOk),
+                new PlcSignalShortcut("二维码读取失败", PlcAddresses.S3ScanNg),
+                new PlcSignalShortcut("样品到达检测工位", PlcAddresses.S4HasMaterialForTape),
+                new PlcSignalShortcut("允许相机拍照", PlcAddresses.S4CameraAllowed),
+                new PlcSignalShortcut("相机拍照完成", PlcAddresses.S4CameraDone),
+                new PlcSignalShortcut("检测合格", PlcAddresses.S4CameraOk),
+                new PlcSignalShortcut("检测不合格", PlcAddresses.S4CameraNg)
+            }));
+            signalTabs.TabPages.Add(BuildSignalCategory("整机控制", new[]
+            {
+                new PlcSignalShortcut("自动/手动模式（取反）", PlcAddresses.AutoMode),
+                new PlcSignalShortcut("整机启动/继续", PlcAddresses.LineStart, true),
+                new PlcSignalShortcut("整机暂停", PlcAddresses.LinePause, true),
+                new PlcSignalShortcut("整机回原位", PlcAddresses.LineHome, true),
+                new PlcSignalShortcut("故障复位", PlcAddresses.ResetPulse, true)
+            }));
+            layout.Controls.Add(signalTabs, 0, 1);
+
+            layout.Controls.Add(BuildAdvancedAddressTool(), 0, 2);
+            page.Controls.Add(layout);
+            return page;
+        }
+
+        private TabPage BuildSignalCategory(string title, PlcSignalShortcut[] signals)
+        {
+            TabPage page = NewTabPage(title);
+            TableLayoutPanel table = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 5,
+                RowCount = signals.Length + 1,
+                Padding = new Padding(12, 12, 12, 16)
+            };
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 184));
+            table.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            string[] headers = { "信号名称", "PLC地址", "置 ON", "置 OFF", "读取当前值" };
+            for (int column = 0; column < headers.Length; column++)
+                table.Controls.Add(NewSignalCell(headers[column], true), column, 0);
+
+            for (int row = 0; row < signals.Length; row++)
+            {
+                PlcSignalShortcut signal = signals[row];
+                table.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
+                table.Controls.Add(NewSignalCell(signal.Name, false), 0, row + 1);
+                table.Controls.Add(NewSignalCell(signal.Address, false, true), 1, row + 1);
+
+                Button on = NewSignalButton(signal.Pulse ? "发送脉冲" : "置 ON", Color.FromArgb(39, 145, 91));
+                Button off = NewSignalButton("置 OFF", Color.FromArgb(196, 68, 68));
+                Button read = NewSignalButton("读取", Color.FromArgb(58, 126, 174));
+                Label value = NewSignalCell("--", false);
+                value.TextAlign = ContentAlignment.MiddleCenter;
+                value.ForeColor = Color.FromArgb(35, 83, 125);
+                value.Font = new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold);
+
+                if (signal.Pulse)
+                {
+                    on.Click += async (s, e) =>
+                    {
+                        if (!ConfirmEntitySignalAction(signal.Name + "脉冲")) return;
+                        await ExecuteSignalAction(
+                            () => _plc.PulseAsync(signal.Address, _token),
+                            signal.Name + "脉冲已发送");
+                    };
+                    off.Enabled = false;
+                    off.Text = "脉冲信号";
+                }
+                else
+                {
+                    on.Click += async (s, e) => await ExecuteSignalWrite(signal, true, value);
+                    off.Click += async (s, e) => await ExecuteSignalWrite(signal, false, value);
+                }
+                read.Click += async (s, e) => await ExecuteSignalRead(signal, value);
+
+                table.Controls.Add(on, 2, row + 1);
+                table.Controls.Add(off, 3, row + 1);
+                Panel readPanel = new Panel { Dock = DockStyle.Fill, Margin = new Padding(4) };
+                read.Dock = DockStyle.Left;
+                read.Width = 82;
+                value.Dock = DockStyle.Fill;
+                readPanel.Controls.Add(value);
+                readPanel.Controls.Add(read);
+                table.Controls.Add(readPanel, 4, row + 1);
+            }
+
+            Panel scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Color.White };
+            scroll.Controls.Add(table);
+            page.Controls.Add(scroll);
+            return page;
+        }
+
+        private Control BuildAdvancedAddressTool()
+        {
+            GroupBox group = NewGroup("高级地址读写（用于交互表中未预置的点位）");
+            group.Padding = new Padding(14, 26, 14, 10);
+            TableLayoutPanel row = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 7,
+                RowCount = 1
+            };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            txtAddress.Dock = DockStyle.Fill;
+            txtAddress.Font = new Font("Consolas", 10F);
+            txtAddress.Margin = new Padding(4, 8, 8, 8);
+            txtValue.Dock = DockStyle.Fill;
+            txtValue.Margin = new Padding(4, 8, 8, 8);
+            SetupButton(btnRead, "读取", 0, 0, 80, Color.FromArgb(58, 126, 174));
+            SetupButton(btnOn, "置 ON", 0, 0, 80, Color.FromArgb(39, 145, 91));
+            SetupButton(btnOff, "置 OFF", 0, 0, 80, Color.FromArgb(196, 68, 68));
+            foreach (Button button in new[] { btnRead, btnOn, btnOff })
+            {
+                button.Dock = DockStyle.Fill;
+                button.Margin = new Padding(4, 7, 4, 7);
+            }
+            row.Controls.Add(NewToolbarLabel("PLC地址"), 0, 0);
+            row.Controls.Add(txtAddress, 1, 0);
+            row.Controls.Add(NewToolbarLabel("当前值"), 2, 0);
+            row.Controls.Add(txtValue, 3, 0);
+            row.Controls.Add(btnRead, 4, 0);
+            row.Controls.Add(btnOn, 5, 0);
+            row.Controls.Add(btnOff, 6, 0);
+            group.Controls.Add(row);
+            return group;
+        }
+
+        private async Task ExecuteSignalWrite(PlcSignalShortcut signal, bool value, Label valueLabel)
+        {
+            if (!ConfirmEntitySignalAction(signal.Name + " 置为 " + (value ? "ON" : "OFF"))) return;
+            await ExecuteSignalAction(
+                () => _plc.WriteAsync(signal.Address, value, _token),
+                signal.Name + " 已置为 " + (value ? "ON" : "OFF"));
+            valueLabel.Text = value ? "ON" : "OFF";
+            valueLabel.ForeColor = value ? Color.SeaGreen : Color.DimGray;
+        }
+
+        private async Task ExecuteSignalRead(PlcSignalShortcut signal, Label valueLabel)
+        {
+            object value = null;
+            await ExecuteSignalAction(async () =>
+            {
+                value = await _plc.ReadAsync(signal.Address, _token);
+            }, signal.Name + " 读取完成");
+            bool isOn;
+            if (value != null && bool.TryParse(Convert.ToString(value), out isOn))
+            {
+                valueLabel.Text = isOn ? "ON" : "OFF";
+                valueLabel.ForeColor = isOn ? Color.SeaGreen : Color.DimGray;
+            }
+            else
+            {
+                valueLabel.Text = value == null ? "--" : Convert.ToString(value);
+            }
+        }
+
+        private bool ConfirmEntitySignalAction(string actionName)
+        {
+            if (_settings.Simulation) return true;
+            return MessageBox.Show(
+                "即将向实体PLC发送“" + actionName + "”。\r\n\r\n请确认设备周围无人、机构动作安全后再继续。",
+                "实体PLC操作确认",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        }
+
+        private async Task ExecuteSignalAction(Func<Task> action, string successText)
+        {
+            await ExecuteSafe(async () =>
+            {
+                await action();
+                lblResult.Text = successText;
+            });
+        }
+
+        private static Label NewSignalCell(string text, bool header, bool address = false)
+        {
+            return new Label
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(1),
+                Padding = new Padding(10, 0, 8, 0),
+                Text = text,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoEllipsis = true,
+                BackColor = header ? Color.FromArgb(222, 232, 242) : Color.FromArgb(248, 250, 252),
+                ForeColor = Color.FromArgb(38, 48, 58),
+                Font = address
+                    ? new Font("Consolas", 9.5F)
+                    : new Font("Microsoft YaHei UI", 9.5F, header ? FontStyle.Bold : FontStyle.Regular)
+            };
+        }
+
+        private static Button NewSignalButton(string text, Color color)
+        {
+            Button button = new Button
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(5, 7, 5, 7),
+                Text = text,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = color,
+                ForeColor = Color.White,
+                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold)
+            };
+            button.FlatAppearance.BorderSize = 0;
+            return button;
+        }
+
         private TabPage BuildRegisterPage()
         {
             TabPage page = NewTabPage("PLC寄存器工具");
             TableLayoutPanel layout = new TableLayoutPanel
             {
-                Dock = DockStyle.Top,
-                Height = 300,
+                Dock = DockStyle.Fill,
                 Padding = new Padding(24, 20, 24, 24),
                 ColumnCount = 1,
                 RowCount = 2
             };
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 180));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
             Label warning = new Label
             {
@@ -334,7 +623,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 BackColor = _settings.Simulation ? Color.FromArgb(231, 239, 247) : Color.FromArgb(255, 235, 235),
                 ForeColor = _settings.Simulation ? Color.FromArgb(35, 83, 125) : Color.Firebrick,
                 Text = _settings.Simulation
-                    ? "当前为PLC仿真模式。寄存器操作只影响仿真内存。"
+                    ? "当前为PLC信号驱动仿真。点击整机启动后不会自动推进；请在此写入扫码、拍照等允许信号，寄存器操作只影响仿真内存。"
                     : "警告：当前为实体PLC模式，写点可能直接触发设备动作。"
             };
             layout.Controls.Add(warning, 0, 0);
@@ -342,35 +631,104 @@ namespace SiliconSteelAdhesionTester.Forms
             grpRegister.Controls.Clear();
             grpRegister.Text = "地址读写";
             grpRegister.Dock = DockStyle.Fill;
-            grpRegister.Padding = new Padding(18, 26, 18, 14);
-            FlowLayoutPanel toolbar = new FlowLayoutPanel
+            grpRegister.Padding = new Padding(18, 30, 18, 18);
+
+            TableLayoutPanel registerLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = true,
-                Padding = new Padding(6, 12, 6, 6)
+                ColumnCount = 1,
+                RowCount = 4,
+                Padding = new Padding(6, 4, 6, 4)
             };
-            txtAddress.Width = 330;
+            registerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+            registerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            registerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
+            registerLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            TableLayoutPanel addressRow = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 7,
+                RowCount = 1,
+                Margin = new Padding(0)
+            };
+            addressRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+            addressRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            addressRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
+            addressRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+            addressRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
+            addressRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
+            addressRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
+
             txtAddress.Font = new Font("Consolas", 10.5F);
-            txtValue.Width = 150;
+            txtAddress.Dock = DockStyle.Fill;
+            txtAddress.Margin = new Padding(6, 12, 12, 10);
+            txtValue.Dock = DockStyle.Fill;
+            txtValue.Margin = new Padding(6, 12, 12, 10);
             SetupButton(btnRead, "读取", 0, 0, 92, Color.FromArgb(58, 126, 174));
             SetupButton(btnOn, "置 ON", 0, 0, 92, Color.FromArgb(39, 145, 91));
             SetupButton(btnOff, "置 OFF", 0, 0, 92, Color.FromArgb(196, 68, 68));
-            toolbar.Controls.Add(NewToolbarLabel("PLC地址"));
-            toolbar.Controls.Add(txtAddress);
-            toolbar.Controls.Add(NewToolbarLabel("当前值"));
-            toolbar.Controls.Add(txtValue);
-            toolbar.Controls.Add(btnRead);
-            toolbar.Controls.Add(btnOn);
-            toolbar.Controls.Add(btnOff);
+            Button[] registerButtons = { btnRead, btnOn, btnOff };
+            foreach (Button button in registerButtons)
+            {
+                button.Dock = DockStyle.Fill;
+                button.Margin = new Padding(6, 10, 6, 10);
+            }
+            Label addressLabel = NewToolbarLabel("PLC地址");
+            addressLabel.Dock = DockStyle.Fill;
+            addressLabel.TextAlign = ContentAlignment.MiddleRight;
+            addressLabel.Margin = new Padding(0);
+            Label valueLabel = NewToolbarLabel("当前值");
+            valueLabel.Dock = DockStyle.Fill;
+            valueLabel.TextAlign = ContentAlignment.MiddleRight;
+            valueLabel.Margin = new Padding(0);
+            addressRow.Controls.Add(addressLabel, 0, 0);
+            addressRow.Controls.Add(txtAddress, 1, 0);
+            addressRow.Controls.Add(valueLabel, 2, 0);
+            addressRow.Controls.Add(txtValue, 3, 0);
+            addressRow.Controls.Add(btnRead, 4, 0);
+            addressRow.Controls.Add(btnOn, 5, 0);
+            addressRow.Controls.Add(btnOff, 6, 0);
+            registerLayout.Controls.Add(addressRow, 0, 0);
 
-            string[] quickNames = { "S2扫码允许", "S2第一次拍照", "S2第二次拍照", "S3扫码允许", "S4拍照允许" };
+            Label quickTitle = new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = "常用自动流程信号（点击后仅填入地址，再选择置ON或置OFF）",
+                ForeColor = Color.FromArgb(70, 82, 94),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(8, 0, 0, 0)
+            };
+            registerLayout.Controls.Add(quickTitle, 0, 1);
+
+            TableLayoutPanel quickGrid = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 2,
+                Margin = new Padding(0)
+            };
+            for (int column = 0; column < 3; column++)
+                quickGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333F));
+            quickGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            quickGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+
+            string[] quickNames =
+            {
+                "取向扫码允许（S2）",
+                "取向压弯前拍照（S2）",
+                "取向压弯后拍照（S2）",
+                "无取向扫码允许（S3）",
+                "无取向检测到料（.4）",
+                "无取向拍照允许（S4）"
+            };
             string[] quickAddresses =
             {
                 PlcAddresses.S2ScanAllowed,
                 PlcAddresses.S2FirstPhotoAllowed,
                 PlcAddresses.S2SecondPhotoAllowed,
                 PlcAddresses.S3ScanAllowed,
+                PlcAddresses.S4HasMaterialForTape,
                 PlcAddresses.S4CameraAllowed
             };
             for (int i = 0; i < quickNames.Length; i++)
@@ -379,20 +737,27 @@ namespace SiliconSteelAdhesionTester.Forms
                 Button quick = new Button
                 {
                     Text = quickNames[i],
-                    AutoSize = true,
-                    Height = 38,
-                    Margin = new Padding(8, 12, 0, 0),
+                    Dock = DockStyle.Fill,
+                    Margin = new Padding(6),
                     FlatStyle = FlatStyle.Flat,
-                    BackColor = Color.White
+                    BackColor = Color.White,
+                    Font = new Font("Microsoft YaHei UI", 9.5F)
                 };
                 quick.Click += (s, e) => txtAddress.Text = address;
-                toolbar.Controls.Add(quick);
+                quickGrid.Controls.Add(quick, i % 3, i / 3);
             }
-            lblResult.AutoSize = true;
-            lblResult.Margin = new Padding(16, 20, 0, 0);
+            registerLayout.Controls.Add(quickGrid, 0, 2);
+
+            lblResult.AutoSize = false;
+            lblResult.Dock = DockStyle.Top;
+            lblResult.Height = 42;
+            lblResult.Margin = new Padding(8, 12, 8, 0);
+            lblResult.Padding = new Padding(12, 0, 12, 0);
+            lblResult.TextAlign = ContentAlignment.MiddleLeft;
+            lblResult.BackColor = Color.FromArgb(247, 249, 252);
             lblResult.Text = "等待操作";
-            toolbar.Controls.Add(lblResult);
-            grpRegister.Controls.Add(toolbar);
+            registerLayout.Controls.Add(lblResult, 0, 3);
+            grpRegister.Controls.Add(registerLayout);
             layout.Controls.Add(grpRegister, 0, 1);
             page.Controls.Add(layout);
             return page;
@@ -693,8 +1058,11 @@ namespace SiliconSteelAdhesionTester.Forms
             return new Label
             {
                 Text = text,
-                AutoSize = true,
-                Margin = new Padding(8, 20, 6, 0)
+                AutoSize = false,
+                Dock = DockStyle.Fill,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleRight,
+                Margin = new Padding(6, 8, 6, 8)
             };
         }
 

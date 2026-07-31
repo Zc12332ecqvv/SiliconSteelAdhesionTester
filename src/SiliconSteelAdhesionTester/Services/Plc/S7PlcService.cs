@@ -65,10 +65,23 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                         S3HasPendingMaterial = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S3HasPendingMaterial, cancellationToken).ConfigureAwait(false)),
                         S4HasMaterialForTape = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S4HasMaterialForTape, cancellationToken).ConfigureAwait(false)),
                         S2ScanAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2ScanAllowed, cancellationToken).ConfigureAwait(false)),
+                        S2ScanDone = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2ScanDone, cancellationToken).ConfigureAwait(false)),
+                        S2ScanOk = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2ScanOk, cancellationToken).ConfigureAwait(false)),
+                        S2ScanNg = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2ScanNg, cancellationToken).ConfigureAwait(false)),
                         S3ScanAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S3ScanAllowed, cancellationToken).ConfigureAwait(false)),
+                        S3ScanDone = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S3ScanDone, cancellationToken).ConfigureAwait(false)),
+                        S3ScanOk = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S3ScanOk, cancellationToken).ConfigureAwait(false)),
+                        S3ScanNg = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S3ScanNg, cancellationToken).ConfigureAwait(false)),
                         S2FirstPhotoAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2FirstPhotoAllowed, cancellationToken).ConfigureAwait(false)),
+                        S2FirstPhotoDone = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2FirstPhotoDone, cancellationToken).ConfigureAwait(false)),
                         S2SecondPhotoAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2SecondPhotoAllowed, cancellationToken).ConfigureAwait(false)),
+                        S2SecondPhotoDone = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2SecondPhotoDone, cancellationToken).ConfigureAwait(false)),
+                        S2SecondPhotoOk = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2SecondPhotoOk, cancellationToken).ConfigureAwait(false)),
+                        S2SecondPhotoNg = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S2SecondPhotoNg, cancellationToken).ConfigureAwait(false)),
                         S4PhotoAllowed = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S4CameraAllowed, cancellationToken).ConfigureAwait(false)),
+                        S4PhotoDone = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S4CameraDone, cancellationToken).ConfigureAwait(false)),
+                        S4PhotoOk = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S4CameraOk, cancellationToken).ConfigureAwait(false)),
+                        S4PhotoNg = Convert.ToBoolean(await _plc.ReadAsync(PlcAddresses.S4CameraNg, cancellationToken).ConfigureAwait(false)),
                         FlowMessage = "实体PLC流程状态（根据四工位自动步骤推算）"
                     });
                 }

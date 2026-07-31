@@ -13,10 +13,7 @@ namespace SiliconSteelAdhesionTester.Services.Plc
         private readonly ConcurrentDictionary<string, object> _memory = new ConcurrentDictionary<string, object>();
         private readonly short[] _steps = new short[4];
         private readonly bool[] _stationRunning = { false, false, false, false };
-        private int _processTick;
         private int _completedCount;
-        private int _qrCodeSequence = 1;
-        private string _currentQrCode;
         private bool _lineRunning;
         private bool _linePaused;
         private int _flowStep;
@@ -38,28 +35,6 @@ namespace SiliconSteelAdhesionTester.Services.Plc
             IsConnected = true;
             while (!cancellationToken.IsCancellationRequested)
             {
-                if (_lineRunning && !_linePaused) _processTick++;
-                if (_lineRunning && !_linePaused && _processTick % 8 == 0)
-                {
-                    for (int i = 0; i < 4; i++)
-                    {
-                        if (!_stationRunning[i]) continue;
-                        _steps[i]++;
-                        if (_steps[i] > 15) _steps[i] = 0;
-                    }
-                }
-                if (_lineRunning && !_linePaused && _processTick % 12 == 0)
-                {
-                    _flowStep++;
-                    if (_flowStep >= 8)
-                    {
-                        _flowStep = 0;
-                        _completedCount++;
-                        _qrCodeSequence++;
-                        _currentQrCode = "SIM-QR-" + _qrCodeSequence.ToString("D6");
-                    }
-                }
-
                 StationSnapshot[] stations = new StationSnapshot[4];
                 bool wholeLineHome = true;
                 for (int i = 0; i < 4; i++)
@@ -82,7 +57,7 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     Automatic = !GetBool(PlcAddresses.AutoMode),
                     Timestamp = DateTime.Now,
                     Stations = stations,
-                    QrCodeContent = _currentQrCode,
+                    QrCodeContent = null,
                     TotalCount = _completedCount,
                     ShiftCount = _completedCount,
                     FlowStepIndex = _flowStep,
@@ -93,11 +68,24 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     S3HasPendingMaterial = GetBool(PlcAddresses.S3HasPendingMaterial),
                     S4HasMaterialForTape = GetBool(PlcAddresses.S4HasMaterialForTape),
                     S2ScanAllowed = GetBool(PlcAddresses.S2ScanAllowed),
+                    S2ScanDone = GetBool(PlcAddresses.S2ScanDone),
+                    S2ScanOk = GetBool(PlcAddresses.S2ScanOk),
+                    S2ScanNg = GetBool(PlcAddresses.S2ScanNg),
                     S3ScanAllowed = GetBool(PlcAddresses.S3ScanAllowed),
+                    S3ScanDone = GetBool(PlcAddresses.S3ScanDone),
+                    S3ScanOk = GetBool(PlcAddresses.S3ScanOk),
+                    S3ScanNg = GetBool(PlcAddresses.S3ScanNg),
                     S2FirstPhotoAllowed = GetBool(PlcAddresses.S2FirstPhotoAllowed),
+                    S2FirstPhotoDone = GetBool(PlcAddresses.S2FirstPhotoDone),
                     S2SecondPhotoAllowed = GetBool(PlcAddresses.S2SecondPhotoAllowed),
+                    S2SecondPhotoDone = GetBool(PlcAddresses.S2SecondPhotoDone),
+                    S2SecondPhotoOk = GetBool(PlcAddresses.S2SecondPhotoOk),
+                    S2SecondPhotoNg = GetBool(PlcAddresses.S2SecondPhotoNg),
                     S4PhotoAllowed = GetBool(PlcAddresses.S4CameraAllowed),
-                    FlowMessage = FlowDescription(_flowStep, _lineRunning, _linePaused)
+                    S4PhotoDone = GetBool(PlcAddresses.S4CameraDone),
+                    S4PhotoOk = GetBool(PlcAddresses.S4CameraOk),
+                    S4PhotoNg = GetBool(PlcAddresses.S4CameraNg),
+                    FlowMessage = FlowDescription(_lineRunning, _linePaused)
                 });
                 await Task.Delay(_settings.PollIntervalMs, cancellationToken).ConfigureAwait(false);
             }
@@ -112,18 +100,24 @@ namespace SiliconSteelAdhesionTester.Services.Plc
 
         public Task WriteAsync(string address, object value, CancellationToken cancellationToken)
         {
+            bool wasOn = GetBool(address);
             _memory[address] = value;
             bool isOn = value is bool && (bool)value;
             if (address == PlcAddresses.LineStart && isOn)
             {
-                if (string.IsNullOrEmpty(_currentQrCode))
-                    _currentQrCode = "SIM-QR-" + _qrCodeSequence.ToString("D6");
                 _lineRunning = true;
                 _linePaused = false;
-                for (int i = 0; i < 4; i++) _stationRunning[i] = true;
             }
             else if (address == PlcAddresses.LinePause) { _linePaused = true; }
-            else if (address == PlcAddresses.LineHome && isOn) { for (int i = 0; i < 4; i++) _steps[i] = 0; _flowStep = 0; }
+            else if (address == PlcAddresses.LineHome && isOn)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    _steps[i] = 0;
+                    _stationRunning[i] = false;
+                }
+                _flowStep = 0;
+            }
             else
             {
                 for (int station = 1; station <= 4; station++)
@@ -137,6 +131,7 @@ namespace SiliconSteelAdhesionTester.Services.Plc
                     if (address == PlcAddresses.StationHome(station) && isOn) _steps[station - 1] = 0;
                 }
             }
+            UpdateSignalDrivenState(address, isOn, wasOn);
             return Task.CompletedTask;
         }
 
@@ -150,21 +145,80 @@ namespace SiliconSteelAdhesionTester.Services.Plc
             return _memory.TryGetValue(address, out object value) && value is bool && (bool)value;
         }
 
-        private static string FlowDescription(int step, bool running, bool paused)
+        private void UpdateSignalDrivenState(string address, bool isOn, bool wasOn)
         {
-            string[] descriptions =
+            if (!isOn) return;
+            if (address == PlcAddresses.S2ScanAllowed)
             {
-                "AGV正在配送物料到S1上料位",
-                "S1传感器检测来料到位",
-                "SR-1000读取物料二维码",
-                "上位机执行二维码、品类与重复读取校验",
-                "工业相机采集物料图像",
-                "视觉系统返回有取向、无取向或不良品分类",
-                "PLC按检测结果执行对应工位流程",
-                "本件流程完成，通知AGV并等待下一次来料"
-            };
-            if (!running) return "等待总控下达任务";
-            return paused ? "流程已暂停：" + descriptions[step] : descriptions[step];
+                _stationRunning[1] = true;
+                _steps[1] = 1;
+                _flowStep = 0;
+            }
+            else if (address == PlcAddresses.S2FirstPhotoAllowed)
+            {
+                _stationRunning[1] = true;
+                _steps[1] = 2;
+                _flowStep = 1;
+            }
+            else if (address == PlcAddresses.S2SecondPhotoAllowed)
+            {
+                _stationRunning[1] = true;
+                _steps[1] = 3;
+                _flowStep = 3;
+            }
+            else if (address == PlcAddresses.S2SecondPhotoDone && !wasOn)
+            {
+                _steps[1] = 15;
+                _stationRunning[1] = false;
+                _flowStep = 4;
+                _completedCount++;
+            }
+            else if (address == PlcAddresses.S3ScanAllowed)
+            {
+                _stationRunning[2] = true;
+                _steps[2] = 1;
+                _flowStep = 0;
+            }
+            else if (address == PlcAddresses.S4HasMaterialForTape)
+            {
+                _steps[2] = 15;
+                _stationRunning[2] = false;
+                _stationRunning[3] = true;
+                _steps[3] = 1;
+                _flowStep = 2;
+            }
+            else if (address == PlcAddresses.S4CameraAllowed)
+            {
+                _stationRunning[3] = true;
+                _steps[3] = 2;
+                _flowStep = 3;
+            }
+            else if (address == PlcAddresses.S4CameraDone && !wasOn)
+            {
+                _steps[3] = 15;
+                _stationRunning[3] = false;
+                _flowStep = 4;
+                _completedCount++;
+            }
+        }
+
+        private string FlowDescription(bool running, bool paused)
+        {
+            if (!running) return "等待点击启动";
+            if (paused) return "仿真流程已暂停，等待再次启动";
+            if (GetBool(PlcAddresses.S2SecondPhotoAllowed))
+                return "取向弯折检测工位：压弯后拍照允许已接通";
+            if (GetBool(PlcAddresses.S2FirstPhotoAllowed))
+                return "取向弯折检测工位：压弯前拍照允许已接通";
+            if (GetBool(PlcAddresses.S2ScanAllowed))
+                return "取向弯折检测工位：扫码允许已接通";
+            if (GetBool(PlcAddresses.S4CameraAllowed))
+                return "无取向检测工位：拍照允许已接通";
+            if (GetBool(PlcAddresses.S4HasMaterialForTape))
+                return "无取向试样已到达检测工位";
+            if (GetBool(PlcAddresses.S3ScanAllowed))
+                return "无取向弯折工位：扫码允许已接通";
+            return "仿真已启动，等待工程师调试写入PLC交互信号";
         }
 
         public void Dispose() { IsConnected = false; }

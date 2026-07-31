@@ -56,31 +56,33 @@ namespace SiliconSteelAdhesionTester.Forms
             Font = new Font("Microsoft YaHei UI", 9.5F);
             AutoScaleMode = AutoScaleMode.Dpi;
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(900, 680);
-            Size = new Size(1080, 780);
+            MinimumSize = new Size(900, 560);
+            Size = new Size(1200, 720);
             BackColor = Color.FromArgb(238, 242, 247);
+            Shown += (s, e) => BeginInvoke(new Action(FitToScreenWorkingArea));
 
-            Panel header = new Panel { Dock = DockStyle.Top, Height = 84, BackColor = Color.FromArgb(18, 32, 49) };
+            Panel header = new Panel { Dock = DockStyle.Top, Height = 132, BackColor = Color.FromArgb(18, 32, 49) };
             header.Controls.Add(new Label
             {
                 Text = "系统设置",
                 ForeColor = Color.White,
                 Font = new Font("Microsoft YaHei UI", 18F, FontStyle.Bold),
                 AutoSize = true,
-                Location = new Point(26, 18)
+                Location = new Point(28, 14)
             });
             header.Controls.Add(new Label
             {
                 Text = "现场参数配置中心 · 通讯类参数保存后需重启程序生效",
                 ForeColor = Color.Silver,
                 AutoSize = true,
-                Location = new Point(172, 33)
+                Location = new Point(31, 70)
             });
 
             TabControl tabs = new TabControl
             {
                 Dock = DockStyle.Fill,
-                Padding = new Point(18, 7),
+                Font = new Font("Microsoft YaHei UI", 10F),
+                Padding = new Point(22, 9),
                 HotTrack = true
             };
             tabs.TabPages.Add(BuildNetworkPage());
@@ -88,9 +90,9 @@ namespace SiliconSteelAdhesionTester.Forms
             tabs.TabPages.Add(BuildVisionPage());
             tabs.TabPages.Add(BuildSystemPage());
 
-            Panel footer = new Panel { Dock = DockStyle.Bottom, Height = 76, BackColor = Color.White };
-            Button btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Size = new Size(110, 42), Anchor = AnchorStyles.Top | AnchorStyles.Right };
-            Button btnSave = new Button { Text = "保存设置", Size = new Size(130, 42), BackColor = Color.FromArgb(35, 156, 96), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            Panel footer = new Panel { Dock = DockStyle.Bottom, Height = 72, Padding = new Padding(0, 6, 0, 10), BackColor = Color.White };
+            Button btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Size = new Size(130, 36), Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            Button btnSave = new Button { Text = "保存设置", Size = new Size(160, 36), BackColor = Color.FromArgb(35, 156, 96), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Anchor = AnchorStyles.Top | AnchorStyles.Right };
             btnSave.FlatAppearance.BorderSize = 0;
             btnSave.Click += SaveClicked;
             lblFileState.AutoSize = false;
@@ -100,10 +102,11 @@ namespace SiliconSteelAdhesionTester.Forms
             lblFileState.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             footer.Resize += (s, e) =>
             {
-                btnSave.Location = new Point(footer.ClientSize.Width - btnSave.Width - 24, 17);
-                btnCancel.Location = new Point(btnSave.Left - btnCancel.Width - 12, 17);
-                lblFileState.Location = new Point(24, 17);
-                lblFileState.Size = new Size(Math.Max(120, btnCancel.Left - 48), 42);
+                int top = footer.Padding.Top;
+                btnSave.Location = new Point(footer.ClientSize.Width - btnSave.Width - 18, top);
+                btnCancel.Location = new Point(btnSave.Left - btnCancel.Width - 12, top);
+                lblFileState.Location = new Point(18, top);
+                lblFileState.Size = new Size(Math.Max(120, btnCancel.Left - 36), btnSave.Height);
             };
             footer.Controls.Add(lblFileState);
             footer.Controls.Add(btnCancel);
@@ -116,6 +119,21 @@ namespace SiliconSteelAdhesionTester.Forms
             CancelButton = btnCancel;
             LoadValues();
             UpdateFileState();
+        }
+
+        private void FitToScreenWorkingArea()
+        {
+            Rectangle workingArea = Screen.FromControl(this).WorkingArea;
+            const int bottomSafetyMargin = 16;
+            int availableHeight = Math.Max(MinimumSize.Height, workingArea.Height - bottomSafetyMargin);
+            MaximumSize = new Size(workingArea.Width, availableHeight);
+            Size = new Size(
+                Math.Min(Width, workingArea.Width),
+                Math.Min(Height, availableHeight));
+
+            Location = new Point(
+                Math.Max(workingArea.Left, Math.Min(Left, workingArea.Right - Width)),
+                Math.Max(workingArea.Top, Math.Min(Top, workingArea.Bottom - bottomSafetyMargin - Height)));
         }
 
         private TabPage BuildNetworkPage()
@@ -167,13 +185,13 @@ namespace SiliconSteelAdhesionTester.Forms
             AddRow(table, "无取向最大脱落率(%)", numNonOrientedLoss, "需用标准样品最终标定");
             AddRow(table, "图像差异阈值", numDifference, "OpenCV 0～255");
             AddRow(table, "最小颗粒面积(px)", numParticleArea, "过滤微小噪点");
-            AddRow(table, "图片保存目录", txtVisionDirectory, "可填写相对或绝对路径");
+            AddRow(table, "图片保存目录", DirectoryPicker(txtVisionDirectory), string.Empty);
             AddRow(table, "自动交互", chkAutomaticInteractions, "PLC允许后自动读二维码、取图、判定并返回结果");
             cboCameraProvider.Items.AddRange(new object[] { "MVS海康相机", "文件夹落图" });
             AddRow(table, "相机取图方式", cboCameraProvider, "正式运行选择MVS；无相机调试可选择文件夹落图");
             AddRow(table, "有取向相机IP", txtOrientedCameraIp, "S2第一次、第二次拍照共用的MV-CT120R-9GC01-PRO");
             AddRow(table, "无取向相机IP", txtNonOrientedCameraIp, "S4无取向拍照使用的MV-CT120R-9GC01-PRO");
-            AddRow(table, "相机落图目录", txtCameraInputDirectory, "仅文件夹落图模式使用");
+            AddRow(table, "相机落图目录", DirectoryPicker(txtCameraInputDirectory), string.Empty);
             AddRow(table, "相机取图超时(ms)", numCameraTimeout, "超时后第一次拍照不返回完成，判定拍照返回NG");
             AddRow(table, "文件稳定时间(ms)", numCameraStable, "防止读取仍在写入的图片");
             page.Controls.Add(Wrap(table));
@@ -255,8 +273,8 @@ namespace SiliconSteelAdhesionTester.Forms
             txtVisionDirectory.Text = _settings.VisionOutputDirectory;
             chkAutomaticInteractions.Checked = _settings.AutomaticDeviceInteractionsEnabled;
             cboCameraProvider.SelectedIndex = string.Equals(_settings.CameraProvider, "MVS", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
-            txtOrientedCameraIp.Text = string.IsNullOrWhiteSpace(_settings.OrientedCameraIp) ? _settings.CameraIp : _settings.OrientedCameraIp;
-            txtNonOrientedCameraIp.Text = string.IsNullOrWhiteSpace(_settings.NonOrientedCameraIp) ? _settings.CameraIp : _settings.NonOrientedCameraIp;
+            txtOrientedCameraIp.Text = _settings.OrientedCameraIp;
+            txtNonOrientedCameraIp.Text = _settings.NonOrientedCameraIp;
             txtCameraInputDirectory.Text = _settings.CameraInputDirectory;
             numCameraTimeout.Value = Clamp(numCameraTimeout, _settings.CameraCaptureTimeoutMs);
             numCameraStable.Value = Clamp(numCameraStable, _settings.CameraFileStableMs);
@@ -276,11 +294,11 @@ namespace SiliconSteelAdhesionTester.Forms
 #endif
             bool useTcpScanner = chkScannerEnabled.Checked;
             bool useMvsCamera = cboCameraProvider.SelectedIndex == 0;
-            if ((useEntityPlc && !ValidateIp(txtPlcIp.Text, "PLC IP", out error)) ||
-                (useTcpScanner && !ValidateIp(txtOrientedIp.Text, "取向二维码读取器IP", out error)) ||
-                (useTcpScanner && !ValidateIp(txtNonOrientedIp.Text, "无取向二维码读取器IP", out error)) ||
-                (useMvsCamera && !ValidateIp(txtOrientedCameraIp.Text, "有取向相机IP", out error)) ||
-                (useMvsCamera && !ValidateIp(txtNonOrientedCameraIp.Text, "无取向相机IP", out error)))
+            if ((useEntityPlc && !string.IsNullOrWhiteSpace(txtPlcIp.Text) && !ValidateIp(txtPlcIp.Text, "PLC IP", out error)) ||
+                (useTcpScanner && !string.IsNullOrWhiteSpace(txtOrientedIp.Text) && !ValidateIp(txtOrientedIp.Text, "取向二维码读取器IP", out error)) ||
+                (useTcpScanner && !string.IsNullOrWhiteSpace(txtNonOrientedIp.Text) && !ValidateIp(txtNonOrientedIp.Text, "无取向二维码读取器IP", out error)) ||
+                (useMvsCamera && !string.IsNullOrWhiteSpace(txtOrientedCameraIp.Text) && !ValidateIp(txtOrientedCameraIp.Text, "有取向相机IP", out error)) ||
+                (useMvsCamera && !string.IsNullOrWhiteSpace(txtNonOrientedCameraIp.Text) && !ValidateIp(txtNonOrientedCameraIp.Text, "无取向相机IP", out error)))
             {
                 MessageBox.Show(this, error, "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -293,17 +311,6 @@ namespace SiliconSteelAdhesionTester.Forms
                 MessageBox.Show(this, "LIMS接口地址必须是完整的HTTP或HTTPS地址。", "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            if (string.IsNullOrWhiteSpace(txtVisionDirectory.Text))
-            {
-                MessageBox.Show(this, "图片保存目录不能为空。", "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            if (!useMvsCamera && string.IsNullOrWhiteSpace(txtCameraInputDirectory.Text))
-            {
-                MessageBox.Show(this, "文件夹落图模式下，相机落图目录不能为空。", "参数错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
 #if SIMULATION_ONLY
             _settings.Simulation = true;
 #else
@@ -425,7 +432,7 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private static TabPage NewPage(string text)
         {
-            return new TabPage { Text = text, BackColor = Color.White, Padding = new Padding(18) };
+            return new TabPage { Text = text, BackColor = Color.White, Padding = new Padding(14) };
         }
 
         private static TableLayoutPanel NewTable()
@@ -434,13 +441,14 @@ namespace SiliconSteelAdhesionTester.Forms
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                ColumnCount = 3,
-                Padding = new Padding(8),
+                ColumnCount = 2,
+                // 为固定在窗口底部的保存栏预留滚动空间，确保最后一行可以
+                // 完整滚动到保存栏上方，而不是只露出半行。
+                Padding = new Padding(8, 8, 8, 88),
                 BackColor = Color.White
             };
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             return table;
         }
 
@@ -454,14 +462,60 @@ namespace SiliconSteelAdhesionTester.Forms
         private static void AddRow(TableLayoutPanel table, string label, Control input, string hint)
         {
             int row = table.RowCount++;
-            table.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-            Label title = new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, Padding = new Padding(0, 0, 10, 0) };
+            table.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+            Label title = new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, Padding = new Padding(0, 0, 14, 0), AutoEllipsis = true };
             input.Dock = DockStyle.Fill;
-            input.Margin = new Padding(4, 7, 4, 7);
-            Label note = new Label { Text = hint, Dock = DockStyle.Fill, ForeColor = Color.Gray, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+            input.Margin = new Padding(6, 9, 8, 9);
             table.Controls.Add(title, 0, row);
             table.Controls.Add(input, 1, row);
-            table.Controls.Add(note, 2, row);
+        }
+
+        private Control DirectoryPicker(TextBox textBox)
+        {
+            TableLayoutPanel picker = new TableLayoutPanel
+            {
+                ColumnCount = 2,
+                RowCount = 1,
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty
+            };
+            picker.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            picker.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
+            textBox.Dock = DockStyle.Fill;
+            textBox.Margin = new Padding(0, 2, 12, 2);
+            Button browse = NewSecondaryButton("选择目录", 180);
+            browse.Dock = DockStyle.Fill;
+            browse.Margin = Padding.Empty;
+            browse.Click += (s, e) => SelectDirectory(textBox);
+            picker.Controls.Add(textBox, 0, 0);
+            picker.Controls.Add(browse, 1, 0);
+            return picker;
+        }
+
+        private void SelectDirectory(TextBox target)
+        {
+            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "请选择目录";
+                dialog.ShowNewFolderButton = true;
+                string current = target.Text.Trim();
+                if (!string.IsNullOrEmpty(current))
+                {
+                    try
+                    {
+                        string fullPath = Path.IsPathRooted(current)
+                            ? current
+                            : Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, current));
+                        if (Directory.Exists(fullPath)) dialog.SelectedPath = fullPath;
+                    }
+                    catch (Exception)
+                    {
+                        // 无效的手工输入不影响重新选择目录。
+                    }
+                }
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                    target.Text = dialog.SelectedPath;
+            }
         }
 
         private static Control Pair(Control first, Control second)
@@ -480,15 +534,41 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private static TextBox NewText() { return new TextBox { BorderStyle = BorderStyle.FixedSingle }; }
         private static ComboBox NewCombo() { return new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList }; }
-        private static NumericUpDown NewNumber(decimal min, decimal max) { return new NumericUpDown { Minimum = min, Maximum = max, ThousandsSeparator = true }; }
-        private static NumericUpDown NewDecimal(decimal min, decimal max) { return new NumericUpDown { Minimum = min, Maximum = max, DecimalPlaces = 3, Increment = 0.1M }; }
+        private static NumericUpDown NewNumber(decimal min, decimal max) { return new FocusAwareNumericUpDown { Minimum = min, Maximum = max, ThousandsSeparator = true }; }
+        private static NumericUpDown NewDecimal(decimal min, decimal max) { return new FocusAwareNumericUpDown { Minimum = min, Maximum = max, DecimalPlaces = 3, Increment = 0.1M }; }
+
+        private sealed class FocusAwareNumericUpDown : NumericUpDown
+        {
+            protected override void OnMouseWheel(MouseEventArgs e)
+            {
+                if (Focused)
+                {
+                    base.OnMouseWheel(e);
+                    return;
+                }
+
+                ScrollableControl scroll = Parent as ScrollableControl;
+                Control current = Parent;
+                while ((scroll == null || !scroll.AutoScroll) && current != null)
+                {
+                    current = current.Parent;
+                    scroll = current as ScrollableControl;
+                }
+                if (scroll == null || !scroll.AutoScroll) return;
+
+                int currentY = -scroll.AutoScrollPosition.Y;
+                int maximumY = Math.Max(0, scroll.DisplayRectangle.Height - scroll.ClientSize.Height);
+                int nextY = Math.Max(0, Math.Min(maximumY, currentY - e.Delta));
+                scroll.AutoScrollPosition = new Point(-scroll.AutoScrollPosition.X, nextY);
+            }
+        }
         private static Button NewSecondaryButton(string text, int width)
         {
             Button button = new Button
             {
                 Text = text,
-                Width = width,
-                Height = 34,
+                Width = Math.Max(150, width),
+                Height = 40,
                 BackColor = Color.FromArgb(232, 239, 247),
                 ForeColor = Color.FromArgb(25, 67, 105),
                 FlatStyle = FlatStyle.Flat,

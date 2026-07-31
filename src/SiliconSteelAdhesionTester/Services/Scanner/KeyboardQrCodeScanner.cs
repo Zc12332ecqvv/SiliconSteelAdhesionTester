@@ -76,7 +76,7 @@ namespace SiliconSteelAdhesionTester.Services.Scanner
             return (value ?? string.Empty).Trim(' ', '\t', '\r', '\n', '\0', '\u0002', '\u0003');
         }
     }
-
+    //封装二维码扫码结果状态
     public sealed class QrCodeInputResult
     {
         private QrCodeInputResult(bool hasResult, bool accepted, string qrCodeContent, string message)

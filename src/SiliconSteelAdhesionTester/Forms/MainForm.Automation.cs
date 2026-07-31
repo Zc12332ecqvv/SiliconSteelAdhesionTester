@@ -46,7 +46,7 @@ namespace SiliconSteelAdhesionTester.Forms
             if (!snapshot.S2FirstPhotoAllowed)
             {
                 _s2FirstPhotoAttempted = false;
-                if (_s2FirstPhotoDoneActive)
+                if (_s2FirstPhotoDoneActive || snapshot.S2FirstPhotoDone)
                 {
                     _s2FirstPhotoDoneActive = false;
                     _ = ResetSingleResponseAsync(PlcAddresses.S2FirstPhotoDone, "S2第一次拍照");
@@ -61,7 +61,10 @@ namespace SiliconSteelAdhesionTester.Forms
             if (!snapshot.S2SecondPhotoAllowed)
             {
                 _s2SecondPhotoAttempted = false;
-                if (_s2SecondPhotoResponseActive)
+                if (_s2SecondPhotoResponseActive ||
+                    snapshot.S2SecondPhotoDone ||
+                    snapshot.S2SecondPhotoOk ||
+                    snapshot.S2SecondPhotoNg)
                 {
                     _s2SecondPhotoResponseActive = false;
                     _ = ResetResultResponseAsync(
@@ -74,7 +77,11 @@ namespace SiliconSteelAdhesionTester.Forms
 
             if (snapshot.S4PhotoAllowed && !_s4PhotoResponseActive && !_s4PhotoRequestRunning)
                 _ = HandleS4PhotoAsync();
-            if (!snapshot.S4PhotoAllowed && _s4PhotoResponseActive)
+            if (!snapshot.S4PhotoAllowed &&
+                (_s4PhotoResponseActive ||
+                 snapshot.S4PhotoDone ||
+                 snapshot.S4PhotoOk ||
+                 snapshot.S4PhotoNg))
             {
                 _s4PhotoResponseActive = false;
                 _ = ResetResultResponseAsync(
@@ -187,6 +194,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 AdhesionVisionResult result = _automaticVision.AnalyzeOriented(_orientedBeforeImagePath, after, null, qrCode);
                 _database.SaveVisionResult(qrCode, after, result, _user.UserName);
                 SetPreviewSample(qrCode);
+                ShowCurrentSampleResult(qrCode, "取向", result);
                 await SendResultResponseAsync(
                     PlcAddresses.S2SecondPhotoDone,
                     PlcAddresses.S2SecondPhotoOk,
@@ -194,6 +202,7 @@ namespace SiliconSteelAdhesionTester.Forms
                     result.IsQualified,
                     "S2第二次拍照");
                 _s2SecondPhotoResponseActive = true;
+                RecordTaskResult(result.IsQualified);
                 AppendRuntimeLog("[VISION] S2 " + result.Message);
             }
             catch (OperationCanceledException) when (!_shutdown.IsCancellationRequested)
@@ -226,6 +235,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 AdhesionVisionResult result = _automaticVision.AnalyzeNonOrientedTape(tape, null, qrCode);
                 _database.SaveVisionResult(qrCode, tape, result, _user.UserName);
                 SetPreviewSample(qrCode);
+                ShowCurrentSampleResult(qrCode, "无取向", result);
                 await SendResultResponseAsync(
                     PlcAddresses.S4CameraDone,
                     PlcAddresses.S4CameraOk,
@@ -233,6 +243,7 @@ namespace SiliconSteelAdhesionTester.Forms
                     result.IsQualified,
                     "S4拍照");
                 _s4PhotoResponseActive = true;
+                RecordTaskResult(result.IsQualified);
                 AppendRuntimeLog("[VISION] S4 " + result.Message);
             }
             catch (OperationCanceledException) when (!_shutdown.IsCancellationRequested)
@@ -314,6 +325,8 @@ namespace SiliconSteelAdhesionTester.Forms
                         qrCodeContent));
                 _database.SaveVisionResult(qrCodeContent, afterImagePath, result, _user.UserName);
                 SetPreviewSample(qrCodeContent);
+                ShowCurrentSampleResult(qrCodeContent, "取向", result);
+                RecordTaskResult(result.IsQualified);
                 await SendResultResponseAsync(
                     PlcAddresses.S2SecondPhotoDone,
                     PlcAddresses.S2SecondPhotoOk,
@@ -379,6 +392,8 @@ namespace SiliconSteelAdhesionTester.Forms
                 node);
             if (s2) _s2SecondPhotoResponseActive = true;
             else _s4PhotoResponseActive = true;
+            if (!s2) UpdateBatchSampleFailure(_lastNonOrientedQrCode, message);
+            RecordTaskResult(false);
         }
 
         private async Task SendResultResponseAsync(string done, string ok, string ng, bool accepted, string node)
@@ -446,6 +461,21 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             Queue<string> queue = oriented ? _orientedQrCodeQueue : _nonOrientedQrCodeQueue;
             if (queue.Count > 0) queue.Dequeue();
+            if (_orientedQrCodeQueue.Count > 0 ||
+                (_latestSnapshot != null &&
+                 (_latestSnapshot.S2ScanAllowed ||
+                  _latestSnapshot.S2FirstPhotoAllowed ||
+                  _latestSnapshot.S2SecondPhotoAllowed)))
+                _currentMaterialOriented = true;
+            else if (_nonOrientedQrCodeQueue.Count > 0 ||
+                (_latestSnapshot != null &&
+                 (_latestSnapshot.S3ScanAllowed ||
+                  _latestSnapshot.S4HasMaterialForTape ||
+                  _latestSnapshot.S4PhotoAllowed)))
+                _currentMaterialOriented = false;
+            else
+                _currentMaterialOriented = null;
+            UpdateFlowPresentation();
         }
     }
 }

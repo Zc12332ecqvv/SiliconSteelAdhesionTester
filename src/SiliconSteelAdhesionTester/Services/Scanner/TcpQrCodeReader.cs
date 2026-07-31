@@ -24,6 +24,7 @@ namespace SiliconSteelAdhesionTester.Services.Scanner
 
         public async Task<string> ReadAsync(bool oriented, CancellationToken cancellationToken)
         {
+
             string ip = oriented ? _settings.OrientedScannerIp : _settings.NonOrientedScannerIp;
             int port = oriented ? _settings.OrientedScannerPort : _settings.NonOrientedScannerPort;
             using (TcpClient client = new TcpClient())
@@ -74,7 +75,7 @@ namespace SiliconSteelAdhesionTester.Services.Scanner
                 }
             }
         }
-
+       
         private static async Task SendCommandAsync(NetworkStream stream, string command, CancellationToken cancellationToken)
         {
             byte[] bytes = Encoding.ASCII.GetBytes(command);

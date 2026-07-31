@@ -101,7 +101,7 @@ namespace SiliconSteelAdhesionTester.Configuration
                 VisionMinimumParticleArea = ReadInt("VisionMinimumParticleArea", 20),
                 VisionOutputDirectory = Read("VisionOutputDirectory", "VisionResults"),
                 SiteName = Read("SiteName", string.Empty),
-                DeviceName = Read("DeviceName", "硅钢附着力测试仪"),
+                DeviceName = Read("DeviceName", "自动涂层附着力测试仪"),
                 DeviceCode = Read("DeviceCode", string.Empty),
                 LimsEndpoint = Read("LimsEndpoint", string.Empty),
                 Simulation = Read("PlcMode", "Simulation").Equals("Simulation", StringComparison.OrdinalIgnoreCase)
@@ -243,6 +243,8 @@ namespace SiliconSteelAdhesionTester.Configuration
             VisionOutputDirectory = Value(root, "VisionOutputDirectory", VisionOutputDirectory);
             SiteName = Value(root, "SiteName", SiteName);
             DeviceName = Value(root, "DeviceName", DeviceName);
+            if (DeviceName == "硅钢附着力测试仪")
+                DeviceName = "自动涂层附着力测试仪";
             DeviceCode = Value(root, "DeviceCode", DeviceCode);
             LimsEndpoint = Value(root, "LimsEndpoint", LimsEndpoint);
             Simulation = Value(root, "PlcMode", Simulation ? "Simulation" : "S7")

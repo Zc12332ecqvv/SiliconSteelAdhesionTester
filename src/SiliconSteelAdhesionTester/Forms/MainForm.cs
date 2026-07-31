@@ -45,6 +45,10 @@ namespace SiliconSteelAdhesionTester.Forms
         private bool? _currentMaterialOriented;
         private string _manualTaskId;
         private bool _homeSignalMismatchActive;
+        private int? _taskTotalCount;
+        private int _taskCompletedCount;
+        private int _taskQualifiedCount;
+        private int _taskUnqualifiedCount;
 
         public MainForm()
         {
@@ -87,6 +91,7 @@ namespace SiliconSteelAdhesionTester.Forms
             {
                 MaximizedBounds = Screen.FromHandle(Handle).WorkingArea;
                 ApplyResponsiveLayout();
+                BeginInvoke(new Action(ClearPassiveSelections));
             };
             Resize += (s, e) => ApplyResponsiveLayout();
             FormClosing += (s, e) => _shutdown.Cancel();
@@ -102,8 +107,8 @@ namespace SiliconSteelAdhesionTester.Forms
             pnlHeader.Height = Math.Max(72, (int)(clientHeight * 0.085));
             pnlNavigation.Width = Math.Max(176, Math.Min(250, (int)(clientWidth * 0.12)));
             pnlStationHeader.Width = Math.Max(320, Math.Min(460, (int)(clientWidth * 0.24)));
-            pnlOverview.Height = Math.Max(100, (int)(clientHeight * 0.115));
-            pnlFlow.Height = Math.Max(100, (int)(clientHeight * 0.115));
+            pnlOverview.Height = Math.Max(150, (int)(clientHeight * 0.145));
+            pnlFlow.Height = Math.Max(122, (int)(clientHeight * 0.13));
             pnlBottom.Height = Math.Max(104, (int)(clientHeight * 0.115));
             PerformLayout();
 
@@ -140,37 +145,65 @@ namespace SiliconSteelAdhesionTester.Forms
             int overviewWidth = pnlOverview.ClientSize.Width;
             if (overviewWidth > 0)
             {
-                lblShiftCount.Left = overviewWidth - lblShiftCount.Width - 24;
-                lblTotalCount.Left = lblShiftCount.Left - lblTotalCount.Width - 34;
-                lblQrCodeContent.Top = Math.Max(lblCurrentTask.Bottom + 4, (pnlOverview.ClientSize.Height - lblQrCodeContent.Height) / 2);
-                lblTotalCount.Top = Math.Max(0, (pnlOverview.ClientSize.Height - lblTotalCount.Height) / 2);
-                lblShiftCount.Top = lblTotalCount.Top;
+                int margin = 22;
+                int statisticsLeft = Math.Max(520, (int)(overviewWidth * 0.45));
+                int statisticsWidth = Math.Max(440, overviewWidth - statisticsLeft - margin);
+                int statisticGap = 8;
+                int statisticWidth = Math.Max(98, (statisticsWidth - statisticGap * 3) / 4);
+                Label[] statistics = { lblTotalCount, lblShiftCount, lblQualifiedCount, lblUnqualifiedCount };
+                for (int i = 0; i < statistics.Length; i++)
+                {
+                    statistics[i].Bounds = new Rectangle(
+                        statisticsLeft + i * (statisticWidth + statisticGap),
+                        12,
+                        statisticWidth,
+                        40);
+                    statistics[i].TextAlign = ContentAlignment.MiddleCenter;
+                    statistics[i].BackColor = Color.FromArgb(247, 249, 252);
+                }
+                lblCurrentTask.Width = Math.Max(300, statisticsLeft - lblCurrentTask.Left - 18);
+                lblMaterialType.Left = Math.Max(260, Math.Min(430, statisticsLeft / 2));
+                lblMaterialType.Width = Math.Max(180, statisticsLeft - lblMaterialType.Left - 18);
+                lblQrCodeContent.Width = Math.Max(300, statisticsLeft - lblQrCodeContent.Left - 18);
+                lblQrCodeContent.Top = Math.Max(lblCurrentTask.Bottom + 4, 43);
+                lblTaskProgressText.Bounds = new Rectangle(
+                    statisticsLeft,
+                    58,
+                    statisticsWidth,
+                    30);
+                pnlTaskProgressTrack.Bounds = new Rectangle(
+                    statisticsLeft,
+                    96,
+                    statisticsWidth,
+                    12);
+                UpdateTaskProgressBarWidth();
             }
 
             int flowWidth = pnlFlow.ClientSize.Width;
             if (flowWidth > 0)
             {
-                const int margin = 14;
-                const int gap = 6;
-                int nodeWidth = Math.Max(80, (flowWidth - margin * 2 - gap * 7) / 8);
+                const int margin = 18;
+                const int gap = 10;
+                int nodeWidth = Math.Max(120, (flowWidth - margin * 2 - gap * 4) / 5);
                 for (int i = 0; i < _flowNodes.Length; i++)
                 {
                     _flowNodes[i].Left = margin + i * (nodeWidth + gap);
                     _flowNodes[i].Width = nodeWidth;
+                    _flowNodes[i].Top = 42;
+                    _flowNodes[i].Height = 46;
                     _flowNodes[i].AutoEllipsis = true;
                 }
-                int messageTop = _flowNodes[0].Bottom + 6;
+                lblFlowLegend.AutoSize = false;
+                lblFlowLegend.Location = new Point(margin, 4);
+                lblFlowLegend.Size = new Size(flowWidth - margin * 2, 34);
+                lblFlowLegend.TextAlign = ContentAlignment.MiddleLeft;
+                lblFlowLegend.BringToFront();
+                int messageTop = _flowNodes[0].Bottom + 7;
                 lblFlowMessage.AutoSize = false;
                 lblFlowMessage.Location = new Point(margin, messageTop);
-                lblFlowMessage.Size = new Size(Math.Max(180, flowWidth / 2), lblFlowMessage.PreferredHeight + 4);
+                lblFlowMessage.Size = new Size(flowWidth - margin * 2, lblFlowMessage.PreferredHeight + 4);
                 lblFlowMessage.AutoEllipsis = true;
                 lblFlowMessage.BringToFront();
-                lblFlowLegend.AutoSize = false;
-                lblFlowLegend.Size = new Size(Math.Min(430, flowWidth / 2 - margin), lblFlowLegend.PreferredHeight + 4);
-                lblFlowLegend.Top = messageTop;
-                lblFlowLegend.Left = Math.Max(margin, flowWidth - lblFlowLegend.Width - margin);
-                lblFlowLegend.TextAlign = ContentAlignment.MiddleRight;
-                lblFlowLegend.BringToFront();
                 pnlFlow.Height = Math.Max(pnlFlow.Height, messageTop + Math.Max(lblFlowMessage.Height, lblFlowLegend.Height) + 8);
             }
 
@@ -221,8 +254,8 @@ namespace SiliconSteelAdhesionTester.Forms
 
             int navigationWidth = pnlNavigation.ClientSize.Width;
             Button[] navButtons = _user != null && _user.CanDebug
-                ? new[] { btnNavMonitor, btnNavVision, btnDebug, btnNavRecords, btnNavLogs, btnNavSettings }
-                : new[] { btnNavMonitor, btnNavVision, btnNavRecords, btnNavLogs, btnNavSettings };
+                ? new[] { btnNavMonitor, btnDebug, btnNavRecords, btnNavLogs, btnNavSettings }
+                : new[] { btnNavMonitor, btnNavRecords, btnNavLogs, btnNavSettings };
             int navTop = Math.Max(18, pnlNavigation.ClientSize.Height / 40);
             int navHeight = Math.Max(48, Math.Min(64, pnlNavigation.ClientSize.Height / 13));
             for (int i = 0; i < navButtons.Length; i++)
@@ -291,7 +324,7 @@ namespace SiliconSteelAdhesionTester.Forms
 
             if (_s2ScanAllowed && _s3ScanAllowed)
             {
-                AppendRuntimeLog("[SCANNER] S2与S3同时允许扫码，无法判断二维码所属工位，已拒绝");
+                AppendRuntimeLog("[SCANNER] 取向弯折检测工位与无取向弯折工位同时允许扫码，无法判断二维码所属工位，已拒绝");
                 return;
             }
 
@@ -325,13 +358,8 @@ namespace SiliconSteelAdhesionTester.Forms
             lblCurrentTask.Text = "当前检验号 · 二维码读取完成，正在通知PLC";
             lblMaterialType.Text = type + "硅钢片";
             SetPreviewSample(qrCodeContent);
-
-            if (dgvTasks.Rows.Count == 1 &&
-                Convert.ToString(dgvTasks.Rows[0].Cells[0].Value) == "-")
-                dgvTasks.Rows.Clear();
-            dgvTasks.Rows.Insert(0, qrCodeContent, type, "二维码读取完成");
-            while (dgvTasks.Rows.Count > 100)
-                dgvTasks.Rows.RemoveAt(dgvTasks.Rows.Count - 1);
+            ShowCurrentSamplePending(qrCodeContent, type);
+            AddBatchSamplePending(qrCodeContent, type);
 
             AppendRuntimeLog("[" + type + "] 二维码读取成功：" + qrCodeContent);
             _database.SaveQrCodeScanEvent(qrCodeContent, type, oriented ? "S2" : "S3", true, "二维码读取成功", _user.UserName);
@@ -382,23 +410,25 @@ namespace SiliconSteelAdhesionTester.Forms
         {
             if (InvokeRequired) { BeginInvoke(new Action<object, PlcSnapshot>(PlcSnapshotChanged), sender, snapshot); return; }
             _latestSnapshot = snapshot;
+            _automatic = snapshot.Automatic;
             lblConnection.Text = snapshot.Connected
                 ? "● PLC在线  " + (_settings.Simulation
                     ? "仿真模式"
                     : _settings.PlcIp + ":" + _settings.PlcPort)
                 : "● PLC离线";
             lblConnection.ForeColor = snapshot.Connected ? Color.ForestGreen : Color.Firebrick;
-            lblTotalCount.Text = snapshot.TotalCount.ToString("N0") + "  PCS";
-            lblShiftCount.Text = snapshot.ShiftCount.ToString("N0") + "  PCS";
+            UpdateTaskProgressPresentation();
             string currentQrCode = !string.IsNullOrWhiteSpace(snapshot.QrCodeContent)
                 ? snapshot.QrCodeContent
                 : _lastScannedQrCode;
             lblQrCodeContent.Text = string.IsNullOrWhiteSpace(currentQrCode) ? "-" : currentQrCode;
             lblCurrentTask.Text = string.IsNullOrWhiteSpace(currentQrCode)
-                ? "当前检验号 · 等待二维码/总控任务"
+                ? (_automatic
+                    ? "当前任务 · 等待总控任务（协议待现场确认）"
+                    : "当前任务 · 等待手动任务或扫码")
                 : string.IsNullOrWhiteSpace(snapshot.QrCodeContent)
-                    ? "当前检验号 · 已读取二维码，等待总控任务"
-                    : "当前检验号 · 正在执行";
+                    ? "当前试样 · 已读取二维码"
+                    : "当前试样 · 正在执行";
             SetPreviewSample(currentQrCode);
             lblMode.Text = snapshot.Automatic ? "自动模式" : "手动模式";
             lblMode.BackColor = snapshot.Automatic ? Color.LimeGreen : Color.Gold;
@@ -417,7 +447,6 @@ namespace SiliconSteelAdhesionTester.Forms
             _homeSignalMismatchActive = !homeSignalsAgree;
             UpdateScanPermission(snapshot);
             UpdateAutomaticInteractions(snapshot);
-            _automatic = snapshot.Automatic;
             UpdateStartPauseButtonState(snapshot);
             if (snapshot.S2ScanAllowed && !snapshot.S3ScanAllowed)
                 _currentMaterialOriented = true;
@@ -434,23 +463,25 @@ namespace SiliconSteelAdhesionTester.Forms
             if (snapshot.S2ScanAllowed && !_s2ScanAllowed)
             {
                 _qrCodeScanner?.Reset();
-                AppendRuntimeLog("[QR] PLC允许S2取向工位读取二维码");
+                AppendRuntimeLog("[QR] PLC允许取向弯折检测工位读取二维码");
             }
             if (snapshot.S3ScanAllowed && !_s3ScanAllowed)
             {
                 _qrCodeScanner?.Reset();
-                AppendRuntimeLog("[QR] PLC允许S3无取向工位读取二维码");
+                AppendRuntimeLog("[QR] PLC允许无取向弯折工位读取二维码");
             }
 
             _s2ScanAllowed = snapshot.S2ScanAllowed;
             _s3ScanAllowed = snapshot.S3ScanAllowed;
 
-            if (!snapshot.S2ScanAllowed && _s2ScanResponseActive)
+            if (!snapshot.S2ScanAllowed &&
+                (_s2ScanResponseActive || snapshot.S2ScanDone || snapshot.S2ScanOk || snapshot.S2ScanNg))
             {
                 _s2ScanResponseActive = false;
                 _ = ResetScanResponseAsync(true);
             }
-            if (!snapshot.S3ScanAllowed && _s3ScanResponseActive)
+            if (!snapshot.S3ScanAllowed &&
+                (_s3ScanResponseActive || snapshot.S3ScanDone || snapshot.S3ScanOk || snapshot.S3ScanNg))
             {
                 _s3ScanResponseActive = false;
                 _ = ResetScanResponseAsync(false);
@@ -459,22 +490,37 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private void UpdateFlow(PlcSnapshot snapshot)
         {
-            int current = Math.Max(0, Math.Min(_flowNodes.Length - 1, snapshot.FlowStepIndex));
+            int current = DetermineInteractionStep(snapshot);
+            bool hasActiveSample = _currentMaterialOriented.HasValue;
+            bool completed = _currentMaterialOriented == true
+                ? (_s2SecondPhotoResponseActive || snapshot.S2SecondPhotoDone)
+                : _currentMaterialOriented == false &&
+                  (_s4PhotoResponseActive || snapshot.S4PhotoDone);
+            bool interactionFailed = _currentMaterialOriented == true
+                ? (snapshot.S2ScanDone && snapshot.S2ScanNg) ||
+                  (snapshot.S2SecondPhotoDone && snapshot.S2SecondPhotoNg)
+                : _currentMaterialOriented == false &&
+                  ((snapshot.S3ScanDone && snapshot.S3ScanNg) ||
+                   (snapshot.S4PhotoDone && snapshot.S4PhotoNg));
             for (int i = 0; i < _flowNodes.Length; i++)
             {
-                if (snapshot.FlowFault && i == current)
+                if ((snapshot.FlowFault || interactionFailed) &&
+                    i == (completed ? _flowNodes.Length - 1 : current))
                 {
                     _flowNodes[i].BackColor = Color.Firebrick;
                     _flowNodes[i].ForeColor = Color.White;
                 }
-                else if (i < current)
+                else if (completed || i < current)
                 {
-                    _flowNodes[i].BackColor = Color.LimeGreen;
-                    _flowNodes[i].ForeColor = Color.FromArgb(25, 45, 25);
+                    _flowNodes[i].BackColor = Color.FromArgb(38, 166, 91);
+                    _flowNodes[i].ForeColor = Color.White;
                 }
-                else if (i == current)
+                else if (hasActiveSample && i == current)
                 {
-                    _flowNodes[i].BackColor = snapshot.FlowPaused ? Color.Gold : Color.DodgerBlue;
+                    bool waitingForPlc = IsWaitingForPlc(snapshot, current);
+                    _flowNodes[i].BackColor = snapshot.FlowPaused || waitingForPlc
+                        ? Color.FromArgb(236, 177, 50)
+                        : Color.FromArgb(38, 112, 190);
                     _flowNodes[i].ForeColor = snapshot.FlowPaused ? Color.FromArgb(45, 40, 15) : Color.White;
                 }
                 else
@@ -483,48 +529,195 @@ namespace SiliconSteelAdhesionTester.Forms
                     _flowNodes[i].ForeColor = Color.FromArgb(55, 55, 70);
                 }
             }
-            lblFlowMessage.Text = snapshot.FlowMessage ?? "等待流程状态";
-            lblFlowLegend.Text = snapshot.FlowFault ? "红色：故障" : snapshot.FlowPaused ? "黄色：暂停" : "绿色：完成  蓝色：执行中  白色：未执行";
+            lblFlowMessage.Text = BuildInteractionMessage(snapshot, current, completed);
         }
 
         private void UpdateFlowPresentation()
         {
-            if (_flowNodes == null || _flowNodes.Length != 8) return;
+            if (_flowNodes == null || _flowNodes.Length != 5) return;
 
             string[] captions;
             if (_currentMaterialOriented == true)
             {
                 captions = new[]
                 {
-                    "1 二维码取样", "2 压弯前拍照", "3 固定位置压弯", "4 压弯后拍照",
-                    "5 前后图像比对", "6 OpenCV分析", "7 脱落率判定", "8 保存上传"
+                    "1 扫码", "2 压弯前拍照", "3 等待弯折", "4 压弯后拍照", "5 判定回传"
                 };
+                lblFlowLegend.Text = "当前试样流程 · 取向弯折检测";
+                lblMaterialType.Text = "当前试样 · 取向";
             }
             else if (_currentMaterialOriented == false)
             {
                 captions = new[]
                 {
-                    "1 二维码取样", "2 非取向压弯", "3 胶带粘取", "4 胶带拍照",
-                    "5 颗粒区域提取", "6 OpenCV分析", "7 颗粒结果判定", "8 保存上传"
+                    "1 扫码", "2 等待弯折完成", "3 等待进入检测工位", "4 胶带图像采集", "5 判定回传"
                 };
+                lblFlowLegend.Text = "当前试样流程 · 无取向弯折及检测";
+                lblMaterialType.Text = "当前试样 · 无取向";
             }
             else
             {
                 captions = new[]
                 {
-                    "1 二维码取样", "2 检测准备", "3 试样处理", "4 图像采集",
-                    "5 图像比对", "6 OpenCV分析", "7 结果判定", "8 保存上传"
+                    "1 扫码", "2 等待试样处理", "3 等待检测条件", "4 图像采集", "5 判定回传"
                 };
+                lblFlowLegend.Text = "当前试样流程 · 等待识别试样类型";
+                lblMaterialType.Text = "当前试样 · 等待扫码";
             }
 
             for (int i = 0; i < _flowNodes.Length; i++)
                 _flowNodes[i].Text = captions[i];
         }
 
+        private int DetermineInteractionStep(PlcSnapshot snapshot)
+        {
+            if (_currentMaterialOriented == true)
+            {
+                if (_s2SecondPhotoResponseActive || snapshot.S2SecondPhotoDone) return 4;
+                if (snapshot.S2SecondPhotoAllowed) return 3;
+                if (_s2FirstPhotoDoneActive || snapshot.S2FirstPhotoDone ||
+                    !string.IsNullOrWhiteSpace(_orientedBeforeImagePath)) return 2;
+                if ((snapshot.S2ScanDone && snapshot.S2ScanOk) ||
+                    snapshot.S2FirstPhotoAllowed || _s2ScanResponseActive ||
+                    _orientedQrCodeQueue.Count > 0) return 1;
+                return 0;
+            }
+            if (_currentMaterialOriented == false)
+            {
+                if (_s4PhotoResponseActive || snapshot.S4PhotoDone) return 4;
+                if (snapshot.S4PhotoAllowed || snapshot.S4HasMaterialForTape) return 3;
+                if (IsStationDone(snapshot, 3)) return 2;
+                if ((snapshot.S3ScanDone && snapshot.S3ScanOk) ||
+                    _s3ScanResponseActive || _nonOrientedQrCodeQueue.Count > 0) return 1;
+                return 0;
+            }
+            return 0;
+        }
+
+        private static bool IsStationDone(PlcSnapshot snapshot, int stationNumber)
+        {
+            if (snapshot == null || snapshot.Stations == null) return false;
+            foreach (StationSnapshot station in snapshot.Stations)
+                if (station.Number == stationNumber) return station.Done;
+            return false;
+        }
+
+        private bool IsWaitingForPlc(PlcSnapshot snapshot, int current)
+        {
+            if (snapshot.FlowPaused) return true;
+            if (_currentMaterialOriented == true)
+                return current == 2 && !snapshot.S2SecondPhotoAllowed;
+            if (_currentMaterialOriented == false)
+                return (current == 1 && !snapshot.S4HasMaterialForTape) ||
+                    (current == 3 && !snapshot.S4PhotoAllowed);
+            return false;
+        }
+
+        private string BuildInteractionMessage(PlcSnapshot snapshot, int current, bool completed)
+        {
+            if (snapshot.FlowFault) return "设备流程异常，请查看运行日志和故障信息";
+            if (!_currentMaterialOriented.HasValue)
+                return "等待取向弯折检测工位或无取向弯折工位发出扫码请求";
+            if (snapshot.FlowPaused) return "设备已暂停，当前试样进度保持不变";
+            if (completed)
+                return "本片检测结果已返回PLC，等待PLC复位交互信号";
+            if (_currentMaterialOriented == true)
+            {
+                if (snapshot.S2ScanDone && snapshot.S2ScanNg)
+                    return "二维码读取失败，已返回扫码完成/NG";
+                switch (current)
+                {
+                    case 0: return "取向弯折检测工位允许扫码，正在读取二维码";
+                    case 1: return snapshot.S2ScanDone && snapshot.S2ScanOk
+                        ? "二维码读取成功，等待PLC复位扫码允许并发出压弯前拍照允许"
+                        : snapshot.S2FirstPhotoAllowed
+                        ? "取向弯折检测工位允许压弯前拍照，正在采集图像"
+                        : "扫码已完成，等待PLC发出压弯前拍照允许";
+                    case 2: return "压弯前拍照已完成，等待PLC完成弯折并允许压弯后拍照";
+                    case 3: return "正在采集压弯后图像并执行视觉判定";
+                }
+            }
+            else
+            {
+                if (snapshot.S3ScanDone && snapshot.S3ScanNg)
+                    return "二维码读取失败，已返回扫码完成/NG";
+                switch (current)
+                {
+                    case 0: return "无取向弯折工位允许扫码，正在读取二维码";
+                    case 1: return snapshot.S3ScanDone && snapshot.S3ScanOk
+                        ? "二维码读取成功，等待PLC完成无取向弯折和转运"
+                        : "扫码已完成，等待PLC完成无取向弯折和转运";
+                    case 3: return snapshot.S4PhotoAllowed
+                        ? "无取向检测工位允许拍照，正在采集胶带图像并执行视觉判定"
+                        : "试样已到达无取向检测工位，等待PLC发出拍照允许";
+                }
+            }
+            return "等待PLC交互信号";
+        }
+
+        private void BeginPlaceholderMasterTask()
+        {
+            _manualTaskId = null;
+            BeginTaskProgress(null);
+            lblCurrentTask.Text = "当前任务 · 等待总控任务（协议待现场确认）";
+        }
+
+        private void BeginTaskProgress(int? totalCount)
+        {
+            _taskTotalCount = totalCount;
+            _taskCompletedCount = 0;
+            _taskQualifiedCount = 0;
+            _taskUnqualifiedCount = 0;
+            ClearBatchSampleList();
+            UpdateTaskProgressPresentation();
+        }
+
+        private void RecordTaskResult(bool qualified)
+        {
+            _taskCompletedCount++;
+            if (qualified) _taskQualifiedCount++;
+            else _taskUnqualifiedCount++;
+            UpdateTaskProgressPresentation();
+        }
+
+        private void UpdateTaskProgressPresentation()
+        {
+            if (lblTotalCount == null) return;
+            lblTotalCount.Text = "任务总数  " +
+                (_taskTotalCount.HasValue ? _taskTotalCount.Value.ToString("N0") : "--");
+            lblShiftCount.Text = "已完成  " + _taskCompletedCount.ToString("N0");
+            lblQualifiedCount.Text = "合格  " + _taskQualifiedCount.ToString("N0");
+            lblUnqualifiedCount.Text = "不合格  " + _taskUnqualifiedCount.ToString("N0");
+
+            if (_taskTotalCount.HasValue && _taskTotalCount.Value > 0)
+            {
+                int boundedCompleted = Math.Min(_taskCompletedCount, _taskTotalCount.Value);
+                int percent = (int)Math.Round(boundedCompleted * 100D / _taskTotalCount.Value);
+                lblTaskProgressText.Text = "任务进度 · " + boundedCompleted + " / " +
+                    _taskTotalCount.Value + "（" + percent + "%）";
+            }
+            else
+            {
+                lblTaskProgressText.Text = _automatic
+                    ? "任务进度 · 等待总控协议确认和任务数据"
+                    : "任务进度 · 请先创建手动任务";
+            }
+            UpdateTaskProgressBarWidth();
+        }
+
+        private void UpdateTaskProgressBarWidth()
+        {
+            if (pnlTaskProgressTrack == null || pnlTaskProgressFill == null) return;
+            double ratio = _taskTotalCount.HasValue && _taskTotalCount.Value > 0
+                ? Math.Min(1D, _taskCompletedCount / (double)_taskTotalCount.Value)
+                : 0D;
+            pnlTaskProgressFill.Width = (int)Math.Round(pnlTaskProgressTrack.ClientSize.Width * ratio);
+        }
+
         private void UpdateStation(StationSnapshot snapshot)
         {
             int index = snapshot.Number - 1;
-            _stationSteps[index].Text = snapshot.Step + " 步";
+            _stationSteps[index].Text = StationDisplayName(snapshot.Number) + " · " + snapshot.Step + "步";
             _stationStatuses[index].Text = StationDescription(snapshot.Number, snapshot, _latestSnapshot);
             _runLamps[index].BackColor = snapshot.Running ? Color.LimeGreen : Color.White;
             _readyLamps[index].BackColor = snapshot.Ready ? Color.LimeGreen : Color.White;
@@ -576,6 +769,18 @@ namespace SiliconSteelAdhesionTester.Forms
             return "工位流程运行中……";
         }
 
+        private static string StationDisplayName(int station)
+        {
+            switch (station)
+            {
+                case 1: return "取放料移载工位";
+                case 2: return "取向弯折检测工位";
+                case 3: return "无取向弯折工位";
+                case 4: return "无取向检测工位";
+                default: return "未知工位";
+            }
+        }
+
         private void PlcCommunicationFault(object sender, string message)
         {
             if (InvokeRequired) { BeginInvoke(new Action<object, string>(PlcCommunicationFault), sender, message); return; }
@@ -597,6 +802,42 @@ namespace SiliconSteelAdhesionTester.Forms
                 txtRuntimeLog.Text = line;
             else
                 txtRuntimeLog.AppendText(Environment.NewLine + line);
+            txtRuntimeLog.SelectionStart = txtRuntimeLog.TextLength;
+            txtRuntimeLog.SelectionLength = 0;
+        }
+
+        private void ClearPassiveSelections()
+        {
+            if (dgvTasks != null)
+            {
+                dgvTasks.ClearSelection();
+                dgvTasks.CurrentCell = null;
+            }
+            if (txtRuntimeLog != null)
+            {
+                txtRuntimeLog.SelectionStart = txtRuntimeLog.TextLength;
+                txtRuntimeLog.SelectionLength = 0;
+            }
+            ActiveControl = null;
+        }
+
+        private void DgvTasksMouseDown(object sender, MouseEventArgs e)
+        {
+            DataGridView.HitTestInfo hit = dgvTasks.HitTest(e.X, e.Y);
+            if (hit.RowIndex >= 0) return;
+            ClearTaskSelection();
+        }
+
+        private void ClearTaskSelectionOnBlankArea(object sender, MouseEventArgs e)
+        {
+            ClearTaskSelection();
+        }
+
+        private void ClearTaskSelection()
+        {
+            dgvTasks.ClearSelection();
+            dgvTasks.CurrentCell = null;
+            ActiveControl = null;
         }
 
         private static string RoleText(UserRole role)

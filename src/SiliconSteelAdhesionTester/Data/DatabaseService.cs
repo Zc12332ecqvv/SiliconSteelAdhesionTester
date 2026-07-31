@@ -154,14 +154,29 @@ VALUES(@a,@b,@c,@d,@e,@f)", qrCodeContent, station, captureStage, imagePath, use
 
         public List<InspectionRecord> GetInspectionRecords(string keyword, int limit)
         {
+            return GetInspectionRecords(keyword, null, null, limit);
+        }
+
+        public List<InspectionRecord> GetInspectionRecords(
+            string keyword,
+            DateTime? from,
+            DateTime? to,
+            int limit)
+        {
             List<InspectionRecord> records = new List<InspectionRecord>();
             using (SQLiteConnection connection = Open())
             using (SQLiteCommand command = connection.CreateCommand())
             {
                 command.CommandText = @"SELECT Id,QrCodeContent,TestType,LossRatePercent,ParticleCount,IsQualified,AnnotatedImagePath,OperatorName,CreatedAt
-FROM VisionResults WHERE (@keyword='' OR QrCodeContent LIKE @pattern) ORDER BY Id DESC LIMIT @limit";
+FROM VisionResults
+WHERE (@keyword='' OR QrCodeContent LIKE @pattern)
+  AND (@from='' OR CreatedAt>=@from)
+  AND (@to='' OR CreatedAt<=@to)
+ORDER BY Id DESC LIMIT @limit";
                 command.Parameters.AddWithValue("@keyword", keyword ?? string.Empty);
                 command.Parameters.AddWithValue("@pattern", "%" + (keyword ?? string.Empty) + "%");
+                command.Parameters.AddWithValue("@from", from.HasValue ? from.Value.ToString("s") : string.Empty);
+                command.Parameters.AddWithValue("@to", to.HasValue ? to.Value.ToString("s") : string.Empty);
                 command.Parameters.AddWithValue("@limit", Math.Max(1, Math.Min(5000, limit)));
                 using (SQLiteDataReader reader = command.ExecuteReader())
                     while (reader.Read())
@@ -178,6 +193,11 @@ FROM VisionResults WHERE (@keyword='' OR QrCodeContent LIKE @pattern) ORDER BY I
 
         public List<SystemLogRecord> GetSystemLogs(int limit)
         {
+            return GetSystemLogs(null, null, limit);
+        }
+
+        public List<SystemLogRecord> GetSystemLogs(DateTime? from, DateTime? to, int limit)
+        {
             List<SystemLogRecord> records = new List<SystemLogRecord>();
             using (SQLiteConnection connection = Open())
             using (SQLiteCommand command = connection.CreateCommand())
@@ -185,7 +205,11 @@ FROM VisionResults WHERE (@keyword='' OR QrCodeContent LIKE @pattern) ORDER BY I
                 command.CommandText = @"SELECT Category,CodeOrAction,Node,Message,UserName,CreatedAt FROM (
 SELECT '故障' Category,FaultCode CodeOrAction,Node,Message,OperatorName UserName,CreatedAt FROM FaultLogs
 UNION ALL SELECT '操作',Action,'',Detail,UserName,CreatedAt FROM OperationLogs)
+WHERE (@from='' OR CreatedAt>=@from)
+  AND (@to='' OR CreatedAt<=@to)
 ORDER BY CreatedAt DESC LIMIT @limit";
+                command.Parameters.AddWithValue("@from", from.HasValue ? from.Value.ToString("s") : string.Empty);
+                command.Parameters.AddWithValue("@to", to.HasValue ? to.Value.ToString("s") : string.Empty);
                 command.Parameters.AddWithValue("@limit", Math.Max(1, Math.Min(5000, limit)));
                 using (SQLiteDataReader reader = command.ExecuteReader())
                     while (reader.Read())

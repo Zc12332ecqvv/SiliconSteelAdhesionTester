@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using SiliconSteelAdhesionTester.Models;
 using SiliconSteelAdhesionTester.Services.Vision;
@@ -30,6 +31,7 @@ namespace SiliconSteelAdhesionTester.Data
             if (!File.Exists(DatabasePath) && File.Exists(legacyLogPath))
                 File.Copy(legacyLogPath, DatabasePath);
             if (!File.Exists(DatabasePath)) File.WriteAllText(DatabasePath, "Time\tType\tUser\tCode\tNode\tMessage" + Environment.NewLine, Encoding.UTF8);
+            EnsureTestData();
         }
 
         public UserSession Authenticate(string userName, string password)
@@ -72,8 +74,172 @@ namespace SiliconSteelAdhesionTester.Data
             Append("CAPTURE", userName, captureStage, station, qrCodeContent + " " + imagePath);
         }
 
-        public List<InspectionRecord> GetInspectionRecords(string keyword, int limit) { return new List<InspectionRecord>(); }
-        public List<SystemLogRecord> GetSystemLogs(int limit) { return new List<SystemLogRecord>(); }
+        public List<InspectionRecord> GetInspectionRecords(string keyword, int limit)
+        {
+            return GetInspectionRecords(keyword, null, null, limit);
+        }
+
+        public List<InspectionRecord> GetInspectionRecords(
+            string keyword,
+            DateTime? from,
+            DateTime? to,
+            int limit)
+        {
+            string search = (keyword ?? string.Empty).Trim();
+            List<InspectionRecord> records = new List<InspectionRecord>();
+            if (!File.Exists(DatabasePath)) return records;
+            long id = 0;
+            foreach (string line in File.ReadLines(DatabasePath, Encoding.UTF8).Skip(1))
+            {
+                string[] fields = line.Split('\t');
+                if (fields.Length < 6 || !string.Equals(fields[1], "VISION", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string qrCode = fields[4];
+                if (search.Length > 0 && (qrCode ?? string.Empty).IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+                double lossRate;
+                int particles;
+                DateTime createdAt = ParseTime(fields[0]);
+                if (from.HasValue && createdAt < from.Value) continue;
+                if (to.HasValue && createdAt > to.Value) continue;
+                records.Add(new InspectionRecord
+                {
+                    Id = ++id,
+                    QrCodeContent = qrCode,
+                    MaterialType = ReadLeadingText(fields[5]),
+                    LossRatePercent = TryReadNumber(fields[5], "脱落率=", "%", out lossRate) ? (double?)lossRate : null,
+                    ParticleCount = TryReadInteger(fields[5], "颗粒=", out particles) ? (int?)particles : null,
+                    IsQualified = string.Equals(fields[3], "OK", StringComparison.OrdinalIgnoreCase),
+                    ImagePath = ReadTrailingText(fields[5], "图片="),
+                    OperatorName = fields[2],
+                    CreatedAt = createdAt
+                });
+            }
+            return records.OrderByDescending(item => item.CreatedAt)
+                .Take(Math.Max(1, Math.Min(5000, limit))).ToList();
+        }
+
+        public List<SystemLogRecord> GetSystemLogs(int limit)
+        {
+            return GetSystemLogs(null, null, limit);
+        }
+
+        public List<SystemLogRecord> GetSystemLogs(DateTime? from, DateTime? to, int limit)
+        {
+            List<SystemLogRecord> records = new List<SystemLogRecord>();
+            if (!File.Exists(DatabasePath)) return records;
+            foreach (string line in File.ReadLines(DatabasePath, Encoding.UTF8).Skip(1))
+            {
+                string[] fields = line.Split('\t');
+                if (fields.Length < 6 ||
+                    (!string.Equals(fields[1], "FAULT", StringComparison.OrdinalIgnoreCase) &&
+                     !string.Equals(fields[1], "OPERATION", StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                bool fault = string.Equals(fields[1], "FAULT", StringComparison.OrdinalIgnoreCase);
+                DateTime createdAt = ParseTime(fields[0]);
+                if (from.HasValue && createdAt < from.Value) continue;
+                if (to.HasValue && createdAt > to.Value) continue;
+                records.Add(new SystemLogRecord
+                {
+                    Category = fault ? "故障" : "操作",
+                    CodeOrAction = fields[3],
+                    Node = fields[4],
+                    Message = fields[5],
+                    UserName = fields[2],
+                    CreatedAt = createdAt
+                });
+            }
+            return records.OrderByDescending(item => item.CreatedAt)
+                .Take(Math.Max(1, Math.Min(5000, limit))).ToList();
+        }
+
+        private void EnsureTestData()
+        {
+            const string marker = "TEST_DATA_V1";
+            if (File.ReadAllText(DatabasePath, Encoding.UTF8).Contains(marker)) return;
+
+            DateTime start = DateTime.Now.AddMinutes(-35);
+            string[] types =
+            {
+                "Oriented", "Oriented", "NonOrientedTape", "Oriented",
+                "NonOrientedTape", "Oriented", "NonOrientedTape", "Oriented",
+                "Oriented", "NonOrientedTape", "Oriented", "NonOrientedTape"
+            };
+            double[] lossRates = { 0.42, 0.68, 1.12, 0.55, 2.36, 0.91, 0.37, 1.88, 0.73, 0.64, 2.14, 0.49 };
+            int[] particleCounts = { 2, 3, 6, 2, 14, 4, 1, 11, 3, 2, 12, 2 };
+            for (int i = 0; i < types.Length; i++)
+            {
+                bool qualified = lossRates[i] <= 1.50;
+                AppendAt(
+                    start.AddMinutes(i * 2),
+                    "VISION",
+                    "tester",
+                    qualified ? "OK" : "NG",
+                    "TEST-" + DateTime.Today.ToString("yyyyMMdd") + "-" + (i + 1).ToString("D3"),
+                    types[i] + " 脱落率=" + lossRates[i].ToString("F3") +
+                    "% 颗粒=" + particleCounts[i] + " 图片=");
+            }
+
+            AppendAt(start.AddMinutes(1), "OPERATION", "tester", marker, "", "已生成仿真检测记录与运行日志测试数据");
+            AppendAt(start.AddMinutes(6), "OPERATION", "tester", "整机启动", "", "测试任务启动，任务总数12片");
+            AppendAt(start.AddMinutes(13), "FAULT", "tester", "CAMERA_TIMEOUT", "取向压弯前拍照", "测试故障：等待相机图片超时");
+            AppendAt(start.AddMinutes(14), "OPERATION", "tester", "故障复位", "", "测试故障复位成功，流程继续");
+            AppendAt(start.AddMinutes(21), "FAULT", "tester", "QR_READ_NG", "无取向弯折工位", "测试故障：二维码读取失败后重新触发");
+            AppendAt(start.AddMinutes(22), "OPERATION", "tester", "二维码重读", "无取向弯折工位", "测试二维码重读成功");
+            AppendAt(start.AddMinutes(30), "OPERATION", "tester", "任务完成", "", "测试批次完成：合格9片，不合格3片");
+        }
+
+        private void AppendAt(DateTime time, string type, string user, string code, string node, string message)
+        {
+            string safe = (message ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Replace("\t", " ");
+            File.AppendAllText(
+                DatabasePath,
+                time.ToString("s") + "\t" + type + "\t" + user + "\t" + code + "\t" + node + "\t" + safe + Environment.NewLine,
+                Encoding.UTF8);
+        }
+
+        private static DateTime ParseTime(string value)
+        {
+            DateTime parsed;
+            return DateTime.TryParse(value, out parsed) ? parsed : DateTime.MinValue;
+        }
+
+        private static string ReadLeadingText(string value)
+        {
+            int index = (value ?? string.Empty).IndexOf(' ');
+            return index > 0 ? value.Substring(0, index) : value;
+        }
+
+        private static string ReadTrailingText(string value, string marker)
+        {
+            int index = (value ?? string.Empty).IndexOf(marker, StringComparison.Ordinal);
+            return index < 0 ? null : value.Substring(index + marker.Length).Trim();
+        }
+
+        private static bool TryReadNumber(string value, string startMarker, string endMarker, out double result)
+        {
+            result = 0;
+            int start = (value ?? string.Empty).IndexOf(startMarker, StringComparison.Ordinal);
+            if (start < 0) return false;
+            start += startMarker.Length;
+            int end = value.IndexOf(endMarker, start, StringComparison.Ordinal);
+            if (end < 0) return false;
+            return double.TryParse(
+                value.Substring(start, end - start),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out result);
+        }
+
+        private static bool TryReadInteger(string value, string marker, out int result)
+        {
+            result = 0;
+            string text = ReadTrailingText(value, marker);
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            int separator = text.IndexOf(' ');
+            if (separator >= 0) text = text.Substring(0, separator);
+            return int.TryParse(text, out result);
+        }
 
         private void Append(string type, string user, string code, string node, string message)
         {

@@ -25,10 +25,14 @@ namespace SiliconSteelAdhesionTester.Forms
             _stationSteps = new[] { lblStep1, lblStep2, lblStep3, lblStep4 };
             _stationStarts = new[] { btnS1Start, btnS2Start, btnS3Start, btnS4Start };
             _stationContinuous = new[] { btnS1Continuous, btnS2Continuous, btnS3Continuous, btnS4Continuous };
-            _flowNodes = new[] { lblFlow1, lblFlow2, lblFlow3, lblFlow4, lblFlow5, lblFlow6, lblFlow7, lblFlow8 };
-            lblMaterialType.Text = "等待任务数据";
+            _flowNodes = new[] { lblFlow1, lblFlow2, lblFlow3, lblFlow4, lblFlow5 };
+            lblMaterialType.Text = "当前试样 · 等待扫码";
+            UpdateTaskProgressPresentation();
             UpdateFlowPresentation();
             AppendRuntimeLog("主界面初始化完成");
+            dgvTasks.MouseDown += DgvTasksMouseDown;
+            pnlStationHeader.MouseDown += ClearTaskSelectionOnBlankArea;
+            lblQueueTitle.MouseDown += ClearTaskSelectionOnBlankArea;
             InitializeCommandBar();
 
             btnAutoMode.Click += async (s, e) =>
@@ -39,6 +43,7 @@ namespace SiliconSteelAdhesionTester.Forms
                 {
                     await _plc.WriteAsync(PlcAddresses.AutoMode, false, _shutdown.Token);
                     _automatic = true;
+                    BeginPlaceholderMasterTask();
                     AppendRuntimeLog("已切换为自动模式");
                 }, "自动模式", "已发送自动模式切换指令");
             };
@@ -69,7 +74,6 @@ namespace SiliconSteelAdhesionTester.Forms
             for (int station = 1; station <= 4; station++) BindStation(station);
 
             btnVision.Click += (s, e) => OpenVisionWindow();
-            btnNavVision.Click += (s, e) => OpenVisionWindow();
             btnDebug.Click += (s, e) =>
                 new DebugForm(
                     _plc,
@@ -439,6 +443,9 @@ namespace SiliconSteelAdhesionTester.Forms
                     dgvTasks.Rows.Clear();
                 dgvTasks.Rows.Insert(0, taskId, oriented + " / " + nonOriented, "手动任务待执行");
                 _manualTaskId = taskId;
+                int manualTotal = Math.Max(0, dialog.OrientedCount ?? 0) +
+                    Math.Max(0, dialog.NonOrientedCount ?? 0);
+                BeginTaskProgress(manualTotal > 0 ? (int?)manualTotal : null);
                 lblCurrentTask.Text = "当前任务 · 手动创建，等待启动";
                 lblQrCodeContent.Text = taskId;
                 SetPreviewSample(taskId);
@@ -492,15 +499,15 @@ namespace SiliconSteelAdhesionTester.Forms
             BindCommand(
                 _stationStarts[station - 1],
                 () => _plc.PulseAsync(PlcAddresses.StationStart(station), _shutdown.Token),
-                "S" + station + "启动",
-                "S" + station + "单步启动脉冲已发送");
+                StationDisplayName(station) + "启动",
+                StationDisplayName(station) + "单步启动脉冲已发送");
             BindCommand(_stationContinuous[station - 1], async () =>
             {
                 string address = PlcAddresses.StationContinuous(station);
                 bool current = Convert.ToBoolean(await _plc.ReadAsync(address, _shutdown.Token));
                 await _plc.WriteAsync(address, !current, _shutdown.Token);
                 _stationContinuous[station - 1].BackColor = !current ? Color.SeaGreen : Color.FromArgb(74, 78, 105);
-            }, "S" + station + "连续模式", "S" + station + "连续/单步模式已切换");
+            }, StationDisplayName(station) + "连续模式", StationDisplayName(station) + "连续/单步模式已切换");
         }
 
         private void BindCommand(Button button, Func<Task> action, string actionName = null, string successMessage = null)

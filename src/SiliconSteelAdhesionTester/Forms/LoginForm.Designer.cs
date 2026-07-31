@@ -51,7 +51,7 @@
             this.lblTitle.ForeColor = System.Drawing.Color.White;
             this.lblTitle.Location = new System.Drawing.Point(74, 34);
             this.lblTitle.Name = "lblTitle";
-            this.lblTitle.Text = "硅钢附着力测试仪";
+            this.lblTitle.Text = "自动涂层附着力测试仪";
             // lblSubtitle
             this.lblSubtitle.AutoSize = true;
             this.lblSubtitle.ForeColor = System.Drawing.Color.FromArgb(188, 211, 231);
@@ -93,7 +93,7 @@
             this.MaximizeBox = false;
             this.Name = "LoginForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "硅钢附着力测试仪 - 登录";
+            this.Text = "自动涂层附着力测试仪 - 登录";
             this.pnlHeader.ResumeLayout(false); this.pnlHeader.PerformLayout();
             this.pnlCard.ResumeLayout(false); this.pnlCard.PerformLayout();
             this.ResumeLayout(false);

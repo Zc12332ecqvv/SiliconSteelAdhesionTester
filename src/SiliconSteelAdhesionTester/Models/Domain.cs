@@ -56,9 +56,22 @@ namespace SiliconSteelAdhesionTester.Models
         public bool S3HasPendingMaterial { get; set; }
         public bool S4HasMaterialForTape { get; set; }
         public bool S2ScanAllowed { get; set; }
+        public bool S2ScanDone { get; set; }
+        public bool S2ScanOk { get; set; }
+        public bool S2ScanNg { get; set; }
         public bool S3ScanAllowed { get; set; }
+        public bool S3ScanDone { get; set; }
+        public bool S3ScanOk { get; set; }
+        public bool S3ScanNg { get; set; }
         public bool S2FirstPhotoAllowed { get; set; }
+        public bool S2FirstPhotoDone { get; set; }
         public bool S2SecondPhotoAllowed { get; set; }
+        public bool S2SecondPhotoDone { get; set; }
+        public bool S2SecondPhotoOk { get; set; }
+        public bool S2SecondPhotoNg { get; set; }
         public bool S4PhotoAllowed { get; set; }
+        public bool S4PhotoDone { get; set; }
+        public bool S4PhotoOk { get; set; }
+        public bool S4PhotoNg { get; set; }
     }
 }
