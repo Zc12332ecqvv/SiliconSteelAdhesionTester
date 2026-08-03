@@ -53,7 +53,7 @@ namespace SiliconSteelAdhesionTester.Configuration
 
         public static string OverrideDirectoryPath
         {
-            get { return Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data")); }
+            get { return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data"); }
         }
 
         public static string OverrideFilePath

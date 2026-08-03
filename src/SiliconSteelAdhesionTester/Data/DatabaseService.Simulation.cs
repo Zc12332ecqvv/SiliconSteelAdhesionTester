@@ -25,7 +25,7 @@ namespace SiliconSteelAdhesionTester.Data
 
         public void Initialize()
         {
-            _dataDirectory = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data"));
+            _dataDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
             Directory.CreateDirectory(_dataDirectory);
             string legacyLogPath = Path.Combine(_dataDirectory, "Sorter-Simulation.log");
             if (!File.Exists(DatabasePath) && File.Exists(legacyLogPath))

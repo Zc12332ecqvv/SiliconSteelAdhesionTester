@@ -17,7 +17,7 @@ namespace SiliconSteelAdhesionTester.Data
 
         public DatabaseService()
         {
-            string dataDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data"));
+            string dataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
             Directory.CreateDirectory(dataDir);
             DatabasePath = Path.Combine(dataDir, "AdhesionTester.db");
             string legacyDatabasePath = Path.Combine(dataDir, "Sorter.db");
