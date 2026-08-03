@@ -145,7 +145,7 @@ namespace SiliconSteelAdhesionTester.Forms
 
         private TabPage BuildVisionSimulationPage()
         {
-            TabPage page = NewTabPage("S2视觉仿真");
+            TabPage page = NewTabPage("手动附着性测试");
             TableLayoutPanel layout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -162,15 +162,11 @@ namespace SiliconSteelAdhesionTester.Forms
             _lblModeNotice.Padding = new Padding(18, 0, 18, 0);
             _lblModeNotice.TextAlign = ContentAlignment.MiddleLeft;
             _lblModeNotice.Font = new Font("Microsoft YaHei UI", 10.5F, FontStyle.Bold);
-            _lblModeNotice.BackColor = _settings.Simulation
-                ? Color.FromArgb(224, 245, 235)
-                : Color.FromArgb(255, 235, 235);
-            _lblModeNotice.ForeColor = _settings.Simulation
-                ? Color.FromArgb(25, 112, 72)
-                : Color.Firebrick;
+            _lblModeNotice.BackColor = Color.FromArgb(224, 245, 235);
+            _lblModeNotice.ForeColor = Color.FromArgb(25, 112, 72);
             _lblModeNotice.Text = _settings.Simulation
                 ? "安全仿真：不会连接SR-1000，也不会驱动实体相机。选择两张图片即可完整模拟S2扫码、两次拍照和结果返回。"
-                : "当前是实体PLC模式，一键视觉仿真已禁用；请切换到PLC仿真模式后重启程序。";
+                : "离线测试：手动选择压弯前、压弯后两张已有图片，只分析附着性；不会写PLC、不会触发相机，也不会改变生产任务计数。";
             layout.Controls.Add(_lblModeNotice, 0, 0);
 
             GroupBox inputs = NewGroup("测试数据");
@@ -186,11 +182,11 @@ namespace SiliconSteelAdhesionTester.Forms
             form.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
             for (int row = 0; row < 3; row++) form.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333F));
 
-            _txtSimulationQr.Text = "SIM-S2-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            _txtSimulationQr.Text = (_settings.Simulation ? "SIM-S2-" : "MANUAL-") + DateTime.Now.ToString("yyyyMMdd-HHmmss");
             ConfigureInput(_txtSimulationQr);
             ConfigureInput(_txtBeforeImage);
             ConfigureInput(_txtAfterImage);
-            AddInputRow(form, 0, "测试二维码", _txtSimulationQr, null);
+            AddInputRow(form, 0, "试样编号", _txtSimulationQr, null);
             AddInputRow(form, 1, "压弯前图片", _txtBeforeImage, CreateBrowseButton(_txtBeforeImage, _picBeforePreview));
             AddInputRow(form, 2, "压弯后图片", _txtAfterImage, CreateBrowseButton(_txtAfterImage, _picAfterPreview));
             inputs.Controls.Add(form);
@@ -202,11 +198,11 @@ namespace SiliconSteelAdhesionTester.Forms
             _btnGenerateDemoImages.Location = new Point(0, 14);
             StyleActionButton(_btnGenerateDemoImages, Color.FromArgb(82, 103, 126));
             _btnGenerateDemoImages.Click += (s, e) => GenerateDemoImages();
-            _btnRunS2Simulation.Text = "▶  一键执行S2视觉流程";
+            _btnRunS2Simulation.Text = "▶  分析附着性";
             _btnRunS2Simulation.Size = new Size(310, 54);
             _btnRunS2Simulation.Location = new Point(236, 14);
             StyleActionButton(_btnRunS2Simulation, Color.FromArgb(35, 112, 190));
-            _btnRunS2Simulation.Enabled = _settings.Simulation;
+            _btnRunS2Simulation.Enabled = true;
             _btnRunS2Simulation.Click += async (s, e) => await RunS2SimulationAsync();
             _simulationProgress.Size = new Size(260, 10);
             _simulationProgress.Location = new Point(562, 36);
@@ -257,7 +253,7 @@ namespace SiliconSteelAdhesionTester.Forms
             previewGroup.Controls.Add(previews);
             resultSplit.Panel1.Controls.Add(previewGroup);
 
-            GroupBox logGroup = NewGroup("仿真过程与结果");
+            GroupBox logGroup = NewGroup("测试过程与结果");
             _txtSimulationLog.Dock = DockStyle.Fill;
             _txtSimulationLog.Multiline = true;
             _txtSimulationLog.ReadOnly = true;
@@ -830,7 +826,7 @@ namespace SiliconSteelAdhesionTester.Forms
             string after = _txtAfterImage.Text.Trim();
             if (string.IsNullOrWhiteSpace(qrCode))
             {
-                ShowSimulationValidation("请输入测试二维码。");
+                ShowSimulationValidation("请输入试样编号。");
                 return;
             }
             if (!File.Exists(before))
@@ -850,8 +846,10 @@ namespace SiliconSteelAdhesionTester.Forms
             ShowPreview(_picAfterPreview, after);
             ShowPreview(_picResultPreview, null);
             _lblSimulationResult.ForeColor = Color.FromArgb(35, 83, 125);
-            _lblSimulationResult.Text = "正在执行扫码、第一次拍照、第二次拍照和视觉分析…";
-            AppendSimulationLog("START", "开始S2视觉仿真：" + qrCode);
+            _lblSimulationResult.Text = _settings.Simulation
+                ? "正在执行S2视觉仿真与分析…"
+                : "正在分析压弯前后图片的附着性…";
+            AppendSimulationLog("START", (_settings.Simulation ? "开始S2视觉仿真：" : "开始手动附着性测试：") + qrCode);
             try
             {
                 AdhesionVisionResult result = await _runS2VisionSimulation(qrCode, before, after);
@@ -870,12 +868,12 @@ namespace SiliconSteelAdhesionTester.Forms
                 _lblSimulationResult.ForeColor = Color.Firebrick;
                 _lblSimulationResult.Text = "执行失败：" + ex.Message;
                 AppendSimulationLog("ERROR", ex.Message);
-                MessageBox.Show(this, ex.Message, "S2视觉仿真失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, ex.Message, "附着性测试失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
                 _simulationProgress.Visible = false;
-                _btnRunS2Simulation.Enabled = _settings.Simulation;
+                _btnRunS2Simulation.Enabled = true;
             }
         }
 

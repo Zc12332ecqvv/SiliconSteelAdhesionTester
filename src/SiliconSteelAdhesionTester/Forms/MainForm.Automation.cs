@@ -262,16 +262,44 @@ namespace SiliconSteelAdhesionTester.Forms
             string beforeImagePath,
             string afterImagePath)
         {
-            if (!_settings.Simulation)
-                throw new InvalidOperationException("一键视觉流程只允许在PLC仿真模式下运行。");
             if (_debugS2SimulationRunning)
-                throw new InvalidOperationException("S2视觉仿真正在运行，请等待本轮结束。");
+                throw new InvalidOperationException("附着性视觉测试正在运行，请等待本轮结束。");
             if (string.IsNullOrWhiteSpace(qrCodeContent))
-                throw new ArgumentException("请输入测试二维码。", nameof(qrCodeContent));
+                throw new ArgumentException("请输入试样编号。", nameof(qrCodeContent));
             if (!File.Exists(beforeImagePath))
                 throw new FileNotFoundException("压弯前图片不存在。", beforeImagePath);
             if (!File.Exists(afterImagePath))
                 throw new FileNotFoundException("压弯后图片不存在。", afterImagePath);
+
+            // 实体模式仅做离线图像分析，绝不写PLC、模拟扫码或改变当前生产任务计数。
+            if (!_settings.Simulation)
+            {
+                _debugS2SimulationRunning = true;
+                qrCodeContent = qrCodeContent.Trim();
+                try
+                {
+                    AppendRuntimeLog("[MANUAL VISION] 开始离线附着性测试，试样编号：" + qrCodeContent);
+                    AdhesionVisionResult manualResult = await Task.Run(() =>
+                        _automaticVision.AnalyzeOriented(
+                            beforeImagePath,
+                            afterImagePath,
+                            null,
+                            qrCodeContent));
+                    SetPreviewSample(qrCodeContent);
+                    ShowCurrentSampleResult(qrCodeContent, "取向离线测试", manualResult);
+                    AppendRuntimeLog("[MANUAL VISION] " + manualResult.Message);
+                    return manualResult;
+                }
+                catch (Exception ex)
+                {
+                    LogAutomationFault("MANUAL_VISION", "手动附着性测试", ex.Message);
+                    throw;
+                }
+                finally
+                {
+                    _debugS2SimulationRunning = false;
+                }
+            }
 
             _debugS2SimulationRunning = true;
             qrCodeContent = qrCodeContent.Trim();
